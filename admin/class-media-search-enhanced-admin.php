@@ -16,8 +16,6 @@
  * If you're interested in introducing public-facing
  * functionality, then refer to `class-media-search-enhanced.php`
  *
- * @TODO: Rename this class to a proper name for your plugin.
- *
  * @package Media_Search_Enhanced_Admin
  * @author  1fixdotio <1fixdotio@gmail.com>
  */
@@ -50,20 +48,7 @@ class Media_Search_Enhanced_Admin {
 	private function __construct() {
 
 		/*
-		 * @TODO :
-		 *
-		 * - Uncomment following lines if the admin class should only be available for super admins
-		 */
-		/* if( ! is_super_admin() ) {
-			return;
-		} */
-
-		/*
 		 * Call $plugin_slug from public plugin class.
-		 *
-		 * @TODO:
-		 *
-		 * - Rename "Media_Search_Enhanced" to the name of your initial plugin class
 		 *
 		 */
 		$plugin = Media_Search_Enhanced::get_instance();
@@ -86,8 +71,8 @@ class Media_Search_Enhanced_Admin {
 		 * Read more about actions and filters:
 		 * http://codex.wordpress.org/Plugin_API#Hooks.2C_Actions_and_Filters
 		 */
-		add_action( '@TODO', array( $this, 'action_method_name' ) );
-		add_filter( '@TODO', array( $this, 'filter_method_name' ) );
+		// add_action( '@TODO', array( $this, 'action_method_name' ) );
+		// add_filter( '@TODO', array( $this, 'filter_method_name' ) );
 
 	}
 
@@ -100,15 +85,6 @@ class Media_Search_Enhanced_Admin {
 	 */
 	public static function get_instance() {
 
-		/*
-		 * @TODO :
-		 *
-		 * - Uncomment following lines if the admin class should only be available for super admins
-		 */
-		/* if( ! is_super_admin() ) {
-			return;
-		} */
-
 		// If the single instance hasn't been set, set it now.
 		if ( null == self::$instance ) {
 			self::$instance = new self;
@@ -119,10 +95,6 @@ class Media_Search_Enhanced_Admin {
 
 	/**
 	 * Register and enqueue admin-specific style sheet.
-	 *
-	 * @TODO:
-	 *
-	 * - Rename "Media_Search_Enhanced" to the name your plugin
 	 *
 	 * @since     0.0.1
 	 *
@@ -143,10 +115,6 @@ class Media_Search_Enhanced_Admin {
 
 	/**
 	 * Register and enqueue admin-specific JavaScript.
-	 *
-	 * @TODO:
-	 *
-	 * - Rename "Media_Search_Enhanced" to the name your plugin
 	 *
 	 * @since     0.0.1
 	 *
@@ -187,8 +155,8 @@ class Media_Search_Enhanced_Admin {
 		 *   For reference: http://codex.wordpress.org/Roles_and_Capabilities
 		 */
 		$this->plugin_screen_hook_suffix = add_options_page(
-			__( 'Page Title', $this->plugin_slug ),
-			__( 'Menu Text', $this->plugin_slug ),
+			__( 'Media Search Enhanced', $this->plugin_slug ),
+			__( 'Media Search Enhanced', $this->plugin_slug ),
 			'manage_options',
 			$this->plugin_slug,
 			array( $this, 'display_plugin_admin_page' )
@@ -202,6 +170,7 @@ class Media_Search_Enhanced_Admin {
 	 * @since    0.0.1
 	 */
 	public function display_plugin_admin_page() {
+
 		include_once( 'views/admin.php' );
 	}
 

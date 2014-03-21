@@ -16,8 +16,6 @@
  * If you're interested in introducing administrative or dashboard
  * functionality, then refer to `class-media-search-enhanced-admin.php`
  *
- * @TODO: Rename this class to a proper name for your plugin.
- *
  * @package Media_Search_Enhanced
  * @author  1fixdotio <1fixdotio@gmail.com>
  */
@@ -33,7 +31,6 @@ class Media_Search_Enhanced {
 	const VERSION = '0.0.1';
 
 	/**
-	 * @TODO - Rename "media-search-enhanced" to the name your your plugin
 	 *
 	 * Unique identifier for your plugin.
 	 *
@@ -78,8 +75,8 @@ class Media_Search_Enhanced {
 		/* Define custom functionality.
 		 * Refer To http://codex.wordpress.org/Plugin_API#Hooks.2C_Actions_and_Filters
 		 */
-		add_action( '@TODO', array( $this, 'action_method_name' ) );
-		add_filter( '@TODO', array( $this, 'filter_method_name' ) );
+		// add_action( '@TODO', array( $this, 'action_method_name' ) );
+		// add_filter( '@TODO', array( $this, 'filter_method_name' ) );
 
 	}
 
@@ -91,6 +88,7 @@ class Media_Search_Enhanced {
 	 * @return    Plugin slug variable.
 	 */
 	public function get_plugin_slug() {
+
 		return $this->plugin_slug;
 	}
 
@@ -267,6 +265,7 @@ class Media_Search_Enhanced {
 	 * @since    0.0.1
 	 */
 	public function enqueue_styles() {
+
 		wp_enqueue_style( $this->plugin_slug . '-plugin-styles', plugins_url( 'assets/css/public.css', __FILE__ ), array(), self::VERSION );
 	}
 
@@ -276,6 +275,7 @@ class Media_Search_Enhanced {
 	 * @since    0.0.1
 	 */
 	public function enqueue_scripts() {
+
 		wp_enqueue_script( $this->plugin_slug . '-plugin-script', plugins_url( 'assets/js/public.js', __FILE__ ), array( 'jquery' ), self::VERSION );
 	}
 
