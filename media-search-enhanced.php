@@ -40,8 +40,6 @@ require_once( plugin_dir_path( __FILE__ ) . 'public/class-media-search-enhanced.
  * When the plugin is deleted, the uninstall.php file is loaded.
  *
  */
-register_activation_hook( __FILE__, array( 'Media_Search_Enhanced', 'activate' ) );
-register_deactivation_hook( __FILE__, array( 'Media_Search_Enhanced', 'deactivate' ) );
 
 add_action( 'plugins_loaded', array( 'Media_Search_Enhanced', 'get_instance' ) );
 
