@@ -205,7 +205,7 @@ class Media_Search_Enhanced_Admin {
 
 		$vars = $wp_query->query_vars;
 		if ( empty( $vars ) ) {
-			$vars = $_REQUEST['query'];
+			$vars = ( isset( $_REQUEST['query'] ) ) ? $_REQUEST['query'] : array();
 		}
 
 		// Rewrite the where clause
@@ -231,7 +231,7 @@ class Media_Search_Enhanced_Admin {
 		global $wp_query, $wpdb;
 		$vars = $wp_query->query_vars;
 		if ( empty( $vars ) ) {
-			$vars = $_REQUEST['query'];
+			$vars = ( isset( $_REQUEST['query'] ) ) ? $_REQUEST['query'] : array();
 		}
 
 		if ( ! empty( $vars['s'] ) && ( ( isset( $_REQUEST['action'] ) && 'query-attachments' == $_REQUEST['action'] ) || 'attachment' == $vars['post_type'] ) ) {
@@ -252,7 +252,8 @@ class Media_Search_Enhanced_Admin {
 	 */
 	public function search_media_distinct() {
 
-		return 'DISTINCT';
+		if ( is_search() )
+			return 'DISTINCT';
 
 	}
 
