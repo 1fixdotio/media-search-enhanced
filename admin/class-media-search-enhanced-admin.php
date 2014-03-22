@@ -72,7 +72,9 @@ class Media_Search_Enhanced_Admin {
 		 * http://codex.wordpress.org/Plugin_API#Hooks.2C_Actions_and_Filters
 		 */
 		// add_action( '@TODO', array( $this, 'action_method_name' ) );
-		// add_filter( '@TODO', array( $this, 'filter_method_name' ) );
+		add_filter( 'posts_where', array( $this, 'search_media_where' ) );
+		add_filter( 'posts_join', array( $this, 'search_media_join' ) );
+		add_filter( 'posts_distinct', array( $this, 'search_media_distinct' ) );
 
 	}
 
@@ -191,29 +193,67 @@ class Media_Search_Enhanced_Admin {
 	}
 
 	/**
-	 * NOTE:     Actions are points in the execution of a page or process
-	 *           lifecycle that WordPress fires.
+	 * Set WHERE clause in the SQL statement
 	 *
-	 *           Actions:    http://codex.wordpress.org/Plugin_API#Actions
-	 *           Reference:  http://codex.wordpress.org/Plugin_API/Action_Reference
+	 * @return string WHERE statement
 	 *
-	 * @since    0.0.1
+	 * @since    0.2.0
 	 */
-	public function action_method_name() {
-		// @TODO: Define your action hook callback here
+	public function search_media_where( $where ) {
+
+		global $wp_query, $wpdb;
+
+		$vars = $wp_query->query_vars;
+		if ( empty( $vars ) ) {
+			$vars = $_REQUEST['query'];
+		}
+
+		// Rewrite the where clause
+		if ( ! empty( $vars['s'] ) && ( ( isset( $_REQUEST['action'] ) && 'query-attachments' == $_REQUEST['action'] ) || 'attachment' == $vars['post_type'] ) ) {
+			$where = " AND ( ((($wpdb->posts.post_title LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_content LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_excerpt LIKE '%" . $vars['s'] . "%')))";
+			$where .= " OR ( $wpdb->postmeta.meta_key = '_wp_attachment_image_alt' AND $wpdb->postmeta.meta_value LIKE '%" . $vars['s'] . "%' ) )";
+			$where .= " AND $wpdb->posts.post_type = 'attachment' AND ($wpdb->posts.post_status = 'inherit' OR $wpdb->posts.post_status = 'private')";
+		}
+
+		return $where;
+
 	}
 
 	/**
-	 * NOTE:     Filters are points of execution in which WordPress modifies data
-	 *           before saving it or sending it to the browser.
+	 * Set JOIN statement in the SQL statement
 	 *
-	 *           Filters: http://codex.wordpress.org/Plugin_API#Filters
-	 *           Reference:  http://codex.wordpress.org/Plugin_API/Filter_Reference
+	 * @return string JOIN statement
 	 *
-	 * @since    0.0.1
+	 * @since    0.2.0
 	 */
-	public function filter_method_name() {
-		// @TODO: Define your filter hook callback here
+	public function search_media_join( $join ) {
+
+		global $wp_query, $wpdb;
+		$vars = $wp_query->query_vars;
+		if ( empty( $vars ) ) {
+			$vars = $_REQUEST['query'];
+		}
+
+		if ( ! empty( $vars['s'] ) && ( ( isset( $_REQUEST['action'] ) && 'query-attachments' == $_REQUEST['action'] ) || 'attachment' == $vars['post_type'] ) ) {
+			$join .= " LEFT JOIN $wpdb->postmeta ON $wpdb->posts.ID = $wpdb->postmeta.post_id";
+		}
+
+		return $join;
+
+	}
+
+	/**
+	 * Set DISTINCT statement in the SQL statement
+	 *
+	 * @return string DISTINCT statement
+	 *
+	 * @since 0.2.0
+	 *
+	 */
+	public function search_media_distinct() {
+
+		return 'DISTINCT';
+
 	}
 
 }

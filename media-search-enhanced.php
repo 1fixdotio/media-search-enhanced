@@ -14,7 +14,7 @@
  * Plugin Name:       Media Search Enhanced
  * Plugin URI:        http://1fix.io/media-search-enhanced
  * Description:       Search through all fields in Media Library.
- * Version:           0.1.0
+ * Version:           0.2.0
  * Author:            1fixdotio
  * Author URI:        http://1fix.io
  * Text Domain:       media-search-enhanced
@@ -49,7 +49,7 @@ add_action( 'plugins_loaded', array( 'Media_Search_Enhanced', 'get_instance' ) )
  * Dashboard and Administrative Functionality
  *----------------------------------------------------------------------------*/
 
-if ( is_admin() && ( ! defined( 'DOING_AJAX' ) || ! DOING_AJAX ) ) {
+if ( is_admin() ) {
 
 	require_once( plugin_dir_path( __FILE__ ) . 'admin/class-media-search-enhanced-admin.php' );
 	add_action( 'plugins_loaded', array( 'Media_Search_Enhanced_Admin', 'get_instance' ) );
