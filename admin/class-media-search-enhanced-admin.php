@@ -215,6 +215,10 @@ class Media_Search_Enhanced_Admin {
 			$where .= " AND $wpdb->posts.post_type = 'attachment' AND ($wpdb->posts.post_status = 'inherit' OR $wpdb->posts.post_status = 'private')";
 		}
 
+		if ( ! empty( $vars['post_parent'] ) ) {
+			$where .= " AND $wpdb->posts.post_parent = " . $vars['post_parent'];
+		}
+
 		return $where;
 
 	}
