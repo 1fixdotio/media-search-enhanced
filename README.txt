@@ -18,6 +18,7 @@ This plugin is made for:
 * Search through all fields in Media Library, include: title, caption, alternative text and description.
 * TODO - search media file name.
 * TODO - add result snippet column which shows text snippets around found keyword on the Media Library screen.
+* TODO - search Media Categories, Tags or Custom Taxonomies.
 
 == Installation ==
 
