@@ -5,7 +5,7 @@ Donate link: http://1fix.io/
 Tags: media library, media, attachment
 Requires at least: 3.5
 Tested up to: 3.8.1
-Stable tag: 0.2.0
+Stable tag: 0.2.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -50,6 +50,9 @@ This plugin is made for:
 2. Demo search on the Insert Media - Media Library screen.
 
 == Changelog ==
+
+= 0.2.1 =
+* Add DISTINCT statement to SQL when query media in the "Insert Media" screen
 
 = 0.2.0 =
 * The first version
