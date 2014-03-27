@@ -134,7 +134,13 @@ class Media_Search_Enhanced_Admin {
 	 */
 	public function search_media_distinct() {
 
-		if ( is_search() )
+		global $wp_query;
+		$vars = $wp_query->query_vars;
+		if ( empty( $vars ) ) {
+			$vars = ( isset( $_REQUEST['query'] ) ) ? $_REQUEST['query'] : array();
+		}
+
+		if ( ! empty( $vars['s'] ) )
 			return 'DISTINCT';
 
 	}
