@@ -47,9 +47,9 @@ class Media_Search_Enhanced_Admin {
 	 */
 	private function __construct() {
 
-		add_filter( 'posts_where', array( $this, 'search_media_where' ) );
-		add_filter( 'posts_join', array( $this, 'search_media_join' ) );
-		add_filter( 'posts_distinct', array( $this, 'search_media_distinct' ) );
+		add_filter( 'posts_where', array( $this, 'posts_where' ) );
+		add_filter( 'posts_join', array( $this, 'posts_join' ) );
+		add_filter( 'posts_distinct', array( $this, 'posts_distinct' ) );
 
 	}
 
@@ -77,7 +77,7 @@ class Media_Search_Enhanced_Admin {
 	 *
 	 * @since    0.2.0
 	 */
-	public function search_media_where( $where ) {
+	public function posts_where( $where ) {
 
 		global $wp_query, $wpdb;
 
@@ -88,13 +88,15 @@ class Media_Search_Enhanced_Admin {
 
 		// Rewrite the where clause
 		if ( ! empty( $vars['s'] ) && ( ( isset( $_REQUEST['action'] ) && 'query-attachments' == $_REQUEST['action'] ) || 'attachment' == $vars['post_type'] ) ) {
-			$where = " AND ( ((($wpdb->posts.post_title LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_content LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_excerpt LIKE '%" . $vars['s'] . "%')))";
-			$where .= " OR ( $wpdb->postmeta.meta_key = '_wp_attachment_image_alt' AND $wpdb->postmeta.meta_value LIKE '%" . $vars['s'] . "%' ) )";
-			$where .= " AND $wpdb->posts.post_type = 'attachment' AND ($wpdb->posts.post_status = 'inherit' OR $wpdb->posts.post_status = 'private')";
-		}
+			$where = " AND $wpdb->posts.post_type = 'attachment' AND ($wpdb->posts.post_status = 'inherit' OR $wpdb->posts.post_status = 'private')";
 
-		if ( ! empty( $vars['post_parent'] ) ) {
-			$where .= " AND $wpdb->posts.post_parent = " . $vars['post_parent'];
+			if ( ! empty( $vars['post_parent'] ) ) {
+				$where .= " AND $wpdb->posts.post_parent = " . $vars['post_parent'];
+			}
+
+
+			$where .= " AND ( ((($wpdb->posts.post_title LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_content LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_excerpt LIKE '%" . $vars['s'] . "%')))";
+			$where .= " OR ( $wpdb->postmeta.meta_key = '_wp_attachment_image_alt' AND $wpdb->postmeta.meta_value LIKE '%" . $vars['s'] . "%' ) )";
 		}
 
 		return $where;
@@ -108,7 +110,7 @@ class Media_Search_Enhanced_Admin {
 	 *
 	 * @since    0.2.0
 	 */
-	public function search_media_join( $join ) {
+	public function posts_join( $join ) {
 
 		global $wp_query, $wpdb;
 		$vars = $wp_query->query_vars;
@@ -132,7 +134,7 @@ class Media_Search_Enhanced_Admin {
 	 * @since 0.2.0
 	 *
 	 */
-	public function search_media_distinct() {
+	public function posts_distinct() {
 
 		global $wp_query;
 		$vars = $wp_query->query_vars;
