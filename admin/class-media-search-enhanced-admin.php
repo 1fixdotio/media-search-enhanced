@@ -95,8 +95,18 @@ class Media_Search_Enhanced_Admin {
 			}
 
 
-			$where .= " AND ( ((($wpdb->posts.post_title LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_content LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_excerpt LIKE '%" . $vars['s'] . "%')))";
-			$where .= " OR ( $wpdb->postmeta.meta_key = '_wp_attachment_image_alt' AND $wpdb->postmeta.meta_value LIKE '%" . $vars['s'] . "%' ) )";
+			$where .= " AND ( ($wpdb->posts.post_title LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_content LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_excerpt LIKE '%" . $vars['s'] . "%')";
+			$where .= " OR ($wpdb->postmeta.meta_key = '_wp_attachment_image_alt' AND $wpdb->postmeta.meta_value LIKE '%" . $vars['s'] . "%')";
+
+			// Get taxes for attachements
+			$taxes = get_object_taxonomies( 'attachment' );
+			if ( ! empty( $taxes ) ) {
+				$where .= " OR (tter.slug LIKE '%" . $vars['s'] . "%')";
+				$where .= " OR (ttax.description LIKE '%" . $vars['s'] . "%')";
+				$where .= " OR (tter.name LIKE '%" . $vars['s'] . "%')";
+			}
+
+			$where .= " )";
 		}
 
 		return $where;
@@ -120,6 +130,18 @@ class Media_Search_Enhanced_Admin {
 
 		if ( ! empty( $vars['s'] ) && ( ( isset( $_REQUEST['action'] ) && 'query-attachments' == $_REQUEST['action'] ) || 'attachment' == $vars['post_type'] ) ) {
 			$join .= " LEFT JOIN $wpdb->postmeta ON $wpdb->posts.ID = $wpdb->postmeta.post_id";
+
+			// Get taxes for attachements
+			$taxes = get_object_taxonomies( 'attachment' );
+			if ( ! empty( $taxes ) ) {
+				$on = array();
+				foreach ( $taxes as $tax ) {
+					$on[] = "ttax.taxonomy = '$tax'";
+				}
+				$on = '( ' . implode( ' OR ', $on ) . ' )';
+
+				$join .= " LEFT JOIN $wpdb->term_relationships AS trel ON ($wpdb->posts.ID = trel.object_id) LEFT JOIN $wpdb->term_taxonomy AS ttax ON (" . $on . " AND trel.term_taxonomy_id = ttax.term_taxonomy_id) LEFT JOIN $wpdb->terms AS tter ON (ttax.term_id = tter.term_id) ";
+			}
 		}
 
 		return $join;
