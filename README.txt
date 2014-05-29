@@ -4,8 +4,8 @@ Contributors: 1fixdotio, yoren
 Donate link: http://1fix.io/
 Tags: media library, media, attachment
 Requires at least: 3.5
-Tested up to: 3.9
-Stable tag: 0.3
+Tested up to: 3.9.1
+Stable tag: 0.4
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -17,7 +17,7 @@ This plugin is made for:
 
 * Search through all fields in Media Library, include: title, caption, alternative text and description.
 * Search Taxonomies for Media, include the name, slug and description fields.
-* TODO - search media file name.
+* Search media file name.
 * TODO - add result snippet column which shows text snippets around found keyword on the Media Library screen.
 
 == Installation ==
@@ -50,6 +50,9 @@ This plugin is made for:
 2. Demo search on the Insert Media - Media Library screen.
 
 == Changelog ==
+
+= 0.4 =
+* Search media file name.
 
 = 0.3 =
 * If there are Taxonomies for Media, search the name, slug and description fields.
