@@ -65,9 +65,13 @@ class Media_Search_Enhanced {
 		// Load plugin text domain
 		add_action( 'init', array( $this, 'load_plugin_textdomain' ) );
 
+		// Media Search filters
 		add_filter( 'posts_where', array( 'Media_Search_Enhanced_Admin', 'posts_where' ) );
 		add_filter( 'posts_join', array( 'Media_Search_Enhanced_Admin', 'posts_join' ) );
 		add_filter( 'posts_distinct', array( 'Media_Search_Enhanced_Admin', 'posts_distinct' ) );
+
+		// Create a media search form shortcode
+		add_shortcode( 'mse-search-form', array( $this, 'search_form' ) );
 
 	}
 
@@ -113,6 +117,17 @@ class Media_Search_Enhanced {
 		load_textdomain( $domain, trailingslashit( WP_LANG_DIR ) . $domain . '/' . $domain . '-' . $locale . '.mo' );
 		load_plugin_textdomain( $domain, FALSE, basename( plugin_dir_path( dirname( __FILE__ ) ) ) . '/languages/' );
 
+	}
+
+	public function search_form() {
+
+		$domain = $this->plugin_slug;
+
+		$form = get_search_form( false );
+		$form = preg_replace( '/placeholder=\"*\"/', 'placeholder="' . apply_filters( 'mse_search_form_placeholder', __( 'Search Media...', $domain ) ) . '"', $form );
+		$form = str_replace( '</form>', '<input type="hidden" name="post_type" value="attachment" />', $form );
+
+		return $form;
 	}
 
 }
