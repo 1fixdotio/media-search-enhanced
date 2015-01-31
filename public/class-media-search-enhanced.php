@@ -65,6 +65,10 @@ class Media_Search_Enhanced {
 		// Load plugin text domain
 		add_action( 'init', array( $this, 'load_plugin_textdomain' ) );
 
+		add_filter( 'posts_where', array( 'Media_Search_Enhanced_Admin', 'posts_where' ) );
+		add_filter( 'posts_join', array( 'Media_Search_Enhanced_Admin', 'posts_join' ) );
+		add_filter( 'posts_distinct', array( 'Media_Search_Enhanced_Admin', 'posts_distinct' ) );
+
 	}
 
 	/**

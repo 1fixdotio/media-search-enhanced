@@ -47,9 +47,9 @@ class Media_Search_Enhanced_Admin {
 	 */
 	private function __construct() {
 
-		add_filter( 'posts_where', array( $this, 'posts_where' ) );
-		add_filter( 'posts_join', array( $this, 'posts_join' ) );
-		add_filter( 'posts_distinct', array( $this, 'posts_distinct' ) );
+		// add_filter( 'posts_where', array( $this, 'posts_where' ) );
+		// add_filter( 'posts_join', array( $this, 'posts_join' ) );
+		// add_filter( 'posts_distinct', array( $this, 'posts_distinct' ) );
 
 	}
 
@@ -77,7 +77,7 @@ class Media_Search_Enhanced_Admin {
 	 *
 	 * @since    0.2.0
 	 */
-	public function posts_where( $where ) {
+	public static function posts_where( $where ) {
 
 		global $wp_query, $wpdb;
 
@@ -121,7 +121,7 @@ class Media_Search_Enhanced_Admin {
 	 *
 	 * @since    0.2.0
 	 */
-	public function posts_join( $join ) {
+	public static function posts_join( $join ) {
 
 		global $wp_query, $wpdb;
 		$vars = $wp_query->query_vars;
@@ -157,7 +157,7 @@ class Media_Search_Enhanced_Admin {
 	 * @since 0.2.0
 	 *
 	 */
-	public function posts_distinct() {
+	public static function posts_distinct() {
 
 		global $wp_query;
 		$vars = $wp_query->query_vars;
