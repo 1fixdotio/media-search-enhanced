@@ -5,7 +5,7 @@ Donate link: http://1fix.io/
 Tags: media library, media, attachment
 Requires at least: 3.5
 Tested up to: 4.1
-Stable tag: 0.4
+Stable tag: 0.5
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -15,9 +15,10 @@ Search through all fields in Media Library.
 
 This plugin is made for:
 
-* Search through all fields in Media Library, include: title, caption, alternative text and description.
+* Search through all fields in Media Library, including: title, caption, alternative text and description.
 * Search Taxonomies for Media, include the name, slug and description fields.
 * Search media file name.
+* Use shortcode `[mse-search-form]` to insert a media search form in posts. It will search media by all fields mentioned above.
 
 == Installation ==
 
@@ -49,6 +50,9 @@ This plugin is made for:
 2. Demo search on the Insert Media - Media Library screen.
 
 == Changelog ==
+
+= 0.5 =
+* Use shortcode `[mse-search-form]` to insert a media search form in posts, which only searches for media files (through all fields).
 
 = 0.4 =
 * Search media file name.
