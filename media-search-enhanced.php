@@ -42,14 +42,3 @@ require_once( plugin_dir_path( __FILE__ ) . 'public/class-media-search-enhanced.
  */
 
 add_action( 'plugins_loaded', array( 'Media_Search_Enhanced', 'get_instance' ) );
-
-/*----------------------------------------------------------------------------*
- * Dashboard and Administrative Functionality
- *----------------------------------------------------------------------------*/
-
-//if ( is_admin() ) {
-
-	require_once( plugin_dir_path( __FILE__ ) . 'admin/class-media-search-enhanced-admin.php' );
-	add_action( 'plugins_loaded', array( 'Media_Search_Enhanced_Admin', 'get_instance' ) );
-
-//}
