@@ -28,7 +28,7 @@ class Media_Search_Enhanced {
 	 *
 	 * @var     string
 	 */
-	const VERSION = '0.5';
+	const VERSION = '0.5.0';
 
 	/**
 	 *
@@ -70,7 +70,7 @@ class Media_Search_Enhanced {
 		add_filter( 'posts_join', array( $this, 'posts_join' ) );
 		add_filter( 'posts_distinct', array( $this, 'posts_distinct' ) );
 
-		// Create a media search form shortcode
+		// Add a media search form shortcode
 		add_shortcode( 'mse-search-form', array( $this, 'search_form' ) );
 
 	}
@@ -219,15 +219,24 @@ class Media_Search_Enhanced {
 
 	}
 
+	/**
+	 * Create media search form
+	 *
+	 * @return string Media search form
+	 *
+	 * @since 0.5.0
+	 */
 	public function search_form() {
 
 		$domain = $this->plugin_slug;
 
 		$form = get_search_form( false );
-		$form = preg_replace( '/placeholder=\"*\"/', 'placeholder="' . apply_filters( 'mse_search_form_placeholder', __( 'Search Media...', $domain ) ) . '"', $form );
+		$form = preg_replace( "/placeholder=\"(.\S)*\"/", 'placeholder="' . apply_filters( 'mse_search_form_placeholder', __( 'Search Media...', $domain ) ) . '"', $form );
 		$form = str_replace( '</form>', '<input type="hidden" name="post_type" value="attachment" />', $form );
 
-		return $form;
+		$result = apply_filters( 'mse_search_form', $form );
+
+		return $result;
 	}
 
 }
