@@ -28,7 +28,7 @@ class Media_Search_Enhanced {
 	 *
 	 * @var     string
 	 */
-	const VERSION = '0.4';
+	const VERSION = '0.5.0';
 
 	/**
 	 *
@@ -64,6 +64,14 @@ class Media_Search_Enhanced {
 
 		// Load plugin text domain
 		add_action( 'init', array( $this, 'load_plugin_textdomain' ) );
+
+		// Media Search filters
+		add_filter( 'posts_where', array( $this, 'posts_where' ) );
+		add_filter( 'posts_join', array( $this, 'posts_join' ) );
+		add_filter( 'posts_distinct', array( $this, 'posts_distinct' ) );
+
+		// Add a media search form shortcode
+		add_shortcode( 'mse-search-form', array( $this, 'search_form' ) );
 
 	}
 
@@ -109,6 +117,127 @@ class Media_Search_Enhanced {
 		load_textdomain( $domain, trailingslashit( WP_LANG_DIR ) . $domain . '/' . $domain . '-' . $locale . '.mo' );
 		load_plugin_textdomain( $domain, FALSE, basename( plugin_dir_path( dirname( __FILE__ ) ) ) . '/languages/' );
 
+	}
+
+	/**
+	 * Set WHERE clause in the SQL statement
+	 *
+	 * @return string WHERE statement
+	 *
+	 * @since    0.2.0
+	 */
+	public static function posts_where( $where ) {
+
+		global $wp_query, $wpdb;
+
+		$vars = $wp_query->query_vars;
+		if ( empty( $vars ) ) {
+			$vars = ( isset( $_REQUEST['query'] ) ) ? $_REQUEST['query'] : array();
+		}
+
+		// Rewrite the where clause
+		if ( ! empty( $vars['s'] ) && ( ( isset( $_REQUEST['action'] ) && 'query-attachments' == $_REQUEST['action'] ) || 'attachment' == $vars['post_type'] ) ) {
+			$where = " AND $wpdb->posts.post_type = 'attachment' AND ($wpdb->posts.post_status = 'inherit' OR $wpdb->posts.post_status = 'private')";
+
+			if ( ! empty( $vars['post_parent'] ) ) {
+				$where .= " AND $wpdb->posts.post_parent = " . $vars['post_parent'];
+			}
+
+
+			$where .= " AND ( ($wpdb->posts.post_title LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.guid LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_content LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_excerpt LIKE '%" . $vars['s'] . "%')";
+			$where .= " OR ($wpdb->postmeta.meta_key = '_wp_attachment_image_alt' AND $wpdb->postmeta.meta_value LIKE '%" . $vars['s'] . "%')";
+			$where .= " OR ($wpdb->postmeta.meta_key = '_wp_attached_file' AND $wpdb->postmeta.meta_value LIKE '%" . $vars['s'] . "%')";
+
+			// Get taxes for attachements
+			$taxes = get_object_taxonomies( 'attachment' );
+			if ( ! empty( $taxes ) ) {
+				$where .= " OR (tter.slug LIKE '%" . $vars['s'] . "%')";
+				$where .= " OR (ttax.description LIKE '%" . $vars['s'] . "%')";
+				$where .= " OR (tter.name LIKE '%" . $vars['s'] . "%')";
+			}
+
+			$where .= " )";
+		}
+
+		return $where;
+
+	}
+
+	/**
+	 * Set JOIN statement in the SQL statement
+	 *
+	 * @return string JOIN statement
+	 *
+	 * @since    0.2.0
+	 */
+	public static function posts_join( $join ) {
+
+		global $wp_query, $wpdb;
+		$vars = $wp_query->query_vars;
+		if ( empty( $vars ) ) {
+			$vars = ( isset( $_REQUEST['query'] ) ) ? $_REQUEST['query'] : array();
+		}
+
+		if ( ! empty( $vars['s'] ) && ( ( isset( $_REQUEST['action'] ) && 'query-attachments' == $_REQUEST['action'] ) || 'attachment' == $vars['post_type'] ) ) {
+			$join .= " LEFT JOIN $wpdb->postmeta ON $wpdb->posts.ID = $wpdb->postmeta.post_id";
+
+			// Get taxes for attachements
+			$taxes = get_object_taxonomies( 'attachment' );
+			if ( ! empty( $taxes ) ) {
+				$on = array();
+				foreach ( $taxes as $tax ) {
+					$on[] = "ttax.taxonomy = '$tax'";
+				}
+				$on = '( ' . implode( ' OR ', $on ) . ' )';
+
+				$join .= " LEFT JOIN $wpdb->term_relationships AS trel ON ($wpdb->posts.ID = trel.object_id) LEFT JOIN $wpdb->term_taxonomy AS ttax ON (" . $on . " AND trel.term_taxonomy_id = ttax.term_taxonomy_id) LEFT JOIN $wpdb->terms AS tter ON (ttax.term_id = tter.term_id) ";
+			}
+		}
+
+		return $join;
+
+	}
+
+	/**
+	 * Set DISTINCT statement in the SQL statement
+	 *
+	 * @return string DISTINCT statement
+	 *
+	 * @since 0.2.0
+	 *
+	 */
+	public static function posts_distinct() {
+
+		global $wp_query;
+		$vars = $wp_query->query_vars;
+		if ( empty( $vars ) ) {
+			$vars = ( isset( $_REQUEST['query'] ) ) ? $_REQUEST['query'] : array();
+		}
+
+		if ( ! empty( $vars['s'] ) )
+			return 'DISTINCT';
+
+	}
+
+	/**
+	 * Create media search form
+	 *
+	 * @return string Media search form
+	 *
+	 * @since 0.5.0
+	 */
+	public function search_form() {
+
+		$domain = $this->plugin_slug;
+
+		$form = get_search_form( false );
+		$form = preg_replace( "/(form.*class=\")(.\S*)\"/", '$1$2 ' . apply_filters( 'mse_search_form_class', 'mse-search-form' ) . '"', $form );
+		$form = preg_replace( "/placeholder=\"(.\S)*\"/", 'placeholder="' . apply_filters( 'mse_search_form_placeholder', __( 'Search Media...', $domain ) ) . '"', $form );
+		$form = str_replace( '</form>', '<input type="hidden" name="post_type" value="attachment" /></form>', $form );
+
+		$result = apply_filters( 'mse_search_form', $form );
+
+		return $result;
 	}
 
 }
