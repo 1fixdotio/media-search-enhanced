@@ -231,8 +231,9 @@ class Media_Search_Enhanced {
 		$domain = $this->plugin_slug;
 
 		$form = get_search_form( false );
+		$form = preg_replace( "/(form.*class=\")(.\S*)\"/", '$1$2 ' . apply_filters( 'mse_search_form_class', 'mse-search-form' ) . '"', $form );
 		$form = preg_replace( "/placeholder=\"(.\S)*\"/", 'placeholder="' . apply_filters( 'mse_search_form_placeholder', __( 'Search Media...', $domain ) ) . '"', $form );
-		$form = str_replace( '</form>', '<input type="hidden" name="post_type" value="attachment" />', $form );
+		$form = str_replace( '</form>', '<input type="hidden" name="post_type" value="attachment" /></form>', $form );
 
 		$result = apply_filters( 'mse_search_form', $form );
 

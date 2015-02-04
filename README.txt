@@ -18,7 +18,7 @@ This plugin is made for:
 * Search through all fields in Media Library, including: title, caption, alternative text and description.
 * Search Taxonomies for Media, include the name, slug and description fields.
 * Search media file name.
-* Use shortcode `[mse-search-form]` to insert a media search form in posts. It will search media by all fields mentioned above.
+* Use shortcode `[mse-search-form]` to insert a media search form in posts and template files. It will search for media by all fields mentioned above.
 
 == Installation ==
 

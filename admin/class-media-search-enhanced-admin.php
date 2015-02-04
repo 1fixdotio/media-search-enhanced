@@ -47,10 +47,6 @@ class Media_Search_Enhanced_Admin {
 	 */
 	private function __construct() {
 
-		// add_filter( 'posts_where', array( $this, 'posts_where' ) );
-		// add_filter( 'posts_join', array( $this, 'posts_join' ) );
-		// add_filter( 'posts_distinct', array( $this, 'posts_distinct' ) );
-
 	}
 
 	/**
