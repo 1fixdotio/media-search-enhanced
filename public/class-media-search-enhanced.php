@@ -28,7 +28,7 @@ class Media_Search_Enhanced {
 	 *
 	 * @var     string
 	 */
-	const VERSION = '0.5.1';
+	const VERSION = '0.5.2';
 
 	/**
 	 *
@@ -72,6 +72,9 @@ class Media_Search_Enhanced {
 
 		// Add a media search form shortcode
 		add_shortcode( 'mse-search-form', array( $this, 'search_form' ) );
+
+		// Hook the image into the_excerpt
+		add_filter( 'the_excerpt', array( $this, 'get_the_image' ) );
 
 	}
 
@@ -238,6 +241,38 @@ class Media_Search_Enhanced {
 		$result = apply_filters( 'mse_search_form', $form );
 
 		return $result;
+
+	}
+
+	/**
+	 * Get the attachment image and hook into the_excerpt
+	 *
+	 * @param  string $excerpt The excerpt HTML
+	 * @return string          The hooked excerpt HTML
+	 *
+	 * @since  0.5.2
+	 */
+	public function get_the_image( $excerpt ) {
+
+		global $post;
+
+		if ( ! is_admin() && is_search() && 'attachment' == $post->post_type ) {
+			$params = array(
+				'attachment_id' => $post->ID,
+				'size' => 'thumbnail',
+				'icon' => false,
+				'attr' => ''
+				);
+			$params = apply_filters( 'mse_get_attachment_image_params', $params );
+			extract( $params );
+
+			$html = wp_get_attachment_image( $attachment_id, $size, $icon, $attr );
+
+			$excerpt .= $html;
+		}
+
+		echo $excerpt;
+
 	}
 
 }
