@@ -28,7 +28,7 @@ class Media_Search_Enhanced {
 	 *
 	 * @var     string
 	 */
-	const VERSION = '0.5.2';
+	const VERSION = '0.5.3';
 
 	/**
 	 *
@@ -271,7 +271,7 @@ class Media_Search_Enhanced {
 			$excerpt .= $html;
 		}
 
-		echo $excerpt;
+		return $excerpt;
 
 	}
 

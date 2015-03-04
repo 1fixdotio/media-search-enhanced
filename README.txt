@@ -1,11 +1,11 @@
 === Media Search Enhanced ===
 
-Contributors: 1fixdotio, yoren
+Contributors: 1fixdotio
 Donate link: http://1fix.io/
 Tags: media library, media, attachment
 Requires at least: 3.5
 Tested up to: 4.1.1
-Stable tag: 0.5.2
+Stable tag: 0.5.3
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -51,8 +51,11 @@ This plugin is made for:
 
 == Changelog ==
 
+= 0.5.3 =
+* Bug fix: Filtered excerpt should be returned, not echoed.
+
 = 0.5.2 =
-* Display thumbnail in the media search results.
+* Display thumbnails in the media search results.
 
 = 0.5 =
 * Use shortcode `[mse-search-form]` to insert a media search form in posts, which only searches for media files (through all fields).
