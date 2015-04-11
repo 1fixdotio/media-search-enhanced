@@ -5,7 +5,7 @@ Donate link: http://1fix.io/
 Tags: media library, media, attachment
 Requires at least: 3.5
 Tested up to: 4.1.1
-Stable tag: 0.5.3
+Stable tag: 0.5.4
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -44,12 +44,29 @@ This plugin is made for:
 3. Upload the `media-search-enhanced` directory to the `/wp-content/plugins/` directory
 4. Activate the plugin in the Plugin dashboard
 
+== Frequently Asked Questions ==
+
+= How to link media to the file itself rather than the attachment page in media search results page? =
+
+Please add the following code to the `functions.php` in your theme:
+
+	function my_get_attachment_url( $url, $post_id ) {
+
+		$url = wp_get_attachment_url( $post_id );
+
+		return $url;
+	}
+	add_filter( 'mse_get_attachment_url', 'my_get_attachment_url', 10, 2 );
+
 == Screenshots ==
 
 1. Demo search on the Media Library screen.
 2. Demo search on the Insert Media - Media Library screen.
 
 == Changelog ==
+
+= 0.5.4 =
+* Add filter `mse_get_attachment_url` to modify the attachment URLs in the media search results.
 
 = 0.5.3 =
 * Bug fix: Filtered excerpt should be returned, not echoed.

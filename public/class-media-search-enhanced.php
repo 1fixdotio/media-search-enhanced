@@ -28,7 +28,7 @@ class Media_Search_Enhanced {
 	 *
 	 * @var     string
 	 */
-	const VERSION = '0.5.3';
+	const VERSION = '0.5.4';
 
 	/**
 	 *
@@ -75,6 +75,9 @@ class Media_Search_Enhanced {
 
 		// Hook the image into the_excerpt
 		add_filter( 'the_excerpt', array( $this, 'get_the_image' ) );
+
+		// Change the permalinks at media search results page
+		add_filter( 'attachment_link', array( $this, 'get_the_url' ), 10, 2 );
 
 	}
 
@@ -273,6 +276,24 @@ class Media_Search_Enhanced {
 
 		return $excerpt;
 
+	}
+
+	/**
+	 * Add filter to hook into the attachment URL
+	 *
+	 * @param  string $link    The attachment's permalink.
+	 * @param  int $post_id Attachment ID.
+	 * @return string          The attachment's permalink.
+	 *
+	 * @since 0.5.4
+	 */
+	public function get_the_url( $link, $post_id ) {
+
+		if ( ! is_admin() && is_search() ) {
+			$link = apply_filters( 'mse_get_attachment_url', $link, $post_id );
+		}
+
+		return $link;
 	}
 
 }
