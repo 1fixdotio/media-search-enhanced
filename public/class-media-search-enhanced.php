@@ -66,9 +66,7 @@ class Media_Search_Enhanced {
 		add_action( 'init', array( $this, 'load_plugin_textdomain' ) );
 
 		// Media Search filters
-		add_filter( 'posts_where', array( $this, 'posts_where' ) );
-		add_filter( 'posts_join', array( $this, 'posts_join' ) );
-		add_filter( 'posts_distinct', array( $this, 'posts_distinct' ) );
+		add_filter( 'posts_clauses', array( $this, 'posts_clauses' ), 20 );
 
 		// Add a media search form shortcode
 		add_shortcode( 'mse-search-form', array( $this, 'search_form' ) );
@@ -126,13 +124,13 @@ class Media_Search_Enhanced {
 	}
 
 	/**
-	 * Set WHERE clause in the SQL statement
+	 * Set query clauses in the SQL statement
 	 *
-	 * @return string WHERE statement
+	 * @return array
 	 *
-	 * @since    0.2.0
+	 * @since    0.6.0
 	 */
-	public static function posts_where( $where ) {
+	public static function posts_clauses( $pieces ) {
 
 		global $wp_query, $wpdb;
 
@@ -143,49 +141,27 @@ class Media_Search_Enhanced {
 
 		// Rewrite the where clause
 		if ( ! empty( $vars['s'] ) && ( ( isset( $_REQUEST['action'] ) && 'query-attachments' == $_REQUEST['action'] ) || 'attachment' == $vars['post_type'] ) ) {
-			$where = " AND $wpdb->posts.post_type = 'attachment' AND ($wpdb->posts.post_status = 'inherit' OR $wpdb->posts.post_status = 'private')";
+			$pieces['where'] = " AND $wpdb->posts.post_type = 'attachment' AND ($wpdb->posts.post_status = 'inherit' OR $wpdb->posts.post_status = 'private')";
 
 			if ( ! empty( $vars['post_parent'] ) ) {
-				$where .= " AND $wpdb->posts.post_parent = " . $vars['post_parent'];
+				$pieces['where'] .= " AND $wpdb->posts.post_parent = " . $vars['post_parent'];
 			}
 
-
-			$where .= " AND ( ($wpdb->posts.post_title LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.guid LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_content LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_excerpt LIKE '%" . $vars['s'] . "%')";
-			$where .= " OR ($wpdb->postmeta.meta_key = '_wp_attachment_image_alt' AND $wpdb->postmeta.meta_value LIKE '%" . $vars['s'] . "%')";
-			$where .= " OR ($wpdb->postmeta.meta_key = '_wp_attached_file' AND $wpdb->postmeta.meta_value LIKE '%" . $vars['s'] . "%')";
+			$pieces['where'] .= " AND ( ($wpdb->posts.post_title LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.guid LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_content LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_excerpt LIKE '%" . $vars['s'] . "%')";
+			$pieces['where'] .= " OR ($wpdb->postmeta.meta_key = '_wp_attachment_image_alt' AND $wpdb->postmeta.meta_value LIKE '%" . $vars['s'] . "%')";
+			$pieces['where'] .= " OR ($wpdb->postmeta.meta_key = '_wp_attached_file' AND $wpdb->postmeta.meta_value LIKE '%" . $vars['s'] . "%')";
 
 			// Get taxes for attachements
 			$taxes = get_object_taxonomies( 'attachment' );
 			if ( ! empty( $taxes ) ) {
-				$where .= " OR (tter.slug LIKE '%" . $vars['s'] . "%')";
-				$where .= " OR (ttax.description LIKE '%" . $vars['s'] . "%')";
-				$where .= " OR (tter.name LIKE '%" . $vars['s'] . "%')";
+				$pieces['where'] .= " OR (tter.slug LIKE '%" . $vars['s'] . "%')";
+				$pieces['where'] .= " OR (ttax.description LIKE '%" . $vars['s'] . "%')";
+				$pieces['where'] .= " OR (tter.name LIKE '%" . $vars['s'] . "%')";
 			}
 
-			$where .= " )";
-		}
+			$pieces['where'] .= " )";
 
-		return $where;
-
-	}
-
-	/**
-	 * Set JOIN statement in the SQL statement
-	 *
-	 * @return string JOIN statement
-	 *
-	 * @since    0.2.0
-	 */
-	public static function posts_join( $join ) {
-
-		global $wp_query, $wpdb;
-		$vars = $wp_query->query_vars;
-		if ( empty( $vars ) ) {
-			$vars = ( isset( $_REQUEST['query'] ) ) ? $_REQUEST['query'] : array();
-		}
-
-		if ( ! empty( $vars['s'] ) && ( ( isset( $_REQUEST['action'] ) && 'query-attachments' == $_REQUEST['action'] ) || 'attachment' == $vars['post_type'] ) ) {
-			$join .= " LEFT JOIN $wpdb->postmeta ON $wpdb->posts.ID = $wpdb->postmeta.post_id";
+			$pieces['join'] .= " LEFT JOIN $wpdb->postmeta ON $wpdb->posts.ID = $wpdb->postmeta.post_id";
 
 			// Get taxes for attachements
 			$taxes = get_object_taxonomies( 'attachment' );
@@ -196,33 +172,15 @@ class Media_Search_Enhanced {
 				}
 				$on = '( ' . implode( ' OR ', $on ) . ' )';
 
-				$join .= " LEFT JOIN $wpdb->term_relationships AS trel ON ($wpdb->posts.ID = trel.object_id) LEFT JOIN $wpdb->term_taxonomy AS ttax ON (" . $on . " AND trel.term_taxonomy_id = ttax.term_taxonomy_id) LEFT JOIN $wpdb->terms AS tter ON (ttax.term_id = tter.term_id) ";
+				$pieces['join'] .= " LEFT JOIN $wpdb->term_relationships AS trel ON ($wpdb->posts.ID = trel.object_id) LEFT JOIN $wpdb->term_taxonomy AS ttax ON (" . $on . " AND trel.term_taxonomy_id = ttax.term_taxonomy_id) LEFT JOIN $wpdb->terms AS tter ON (ttax.term_id = tter.term_id) ";
 			}
+
+			$pieces['distinct'] = 'DISTINCT';
+
+			$pieces['orderby'] = "$wpdb->posts.post_date DESC";
 		}
 
-		return $join;
-
-	}
-
-	/**
-	 * Set DISTINCT statement in the SQL statement
-	 *
-	 * @return string DISTINCT statement
-	 *
-	 * @since 0.2.0
-	 *
-	 */
-	public static function posts_distinct() {
-
-		global $wp_query;
-		$vars = $wp_query->query_vars;
-		if ( empty( $vars ) ) {
-			$vars = ( isset( $_REQUEST['query'] ) ) ? $_REQUEST['query'] : array();
-		}
-
-		if ( ! empty( $vars['s'] ) )
-			return 'DISTINCT';
-
+		return $pieces;
 	}
 
 	/**
