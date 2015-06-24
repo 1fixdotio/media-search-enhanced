@@ -66,7 +66,7 @@ Please add the following code to the `functions.php` in your theme:
 == Changelog ==
 
 = 0.6.1 =
-* Security update: use `$wpdb->prepare` to process SQL statement. Thanks to [@daxelrod](https://profiles.wordpress.org/daxelrod/) for this.
+* Security update: use `$wpdb->prepare` to process SQL statements. Thanks to [@daxelrod](https://profiles.wordpress.org/daxelrod/) for this.
 
 = 0.6.0 =
 * Add ID to search fields.
