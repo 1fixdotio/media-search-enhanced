@@ -5,7 +5,7 @@ Donate link: http://1fix.io/
 Tags: media library, media, attachment
 Requires at least: 3.5
 Tested up to: 4.2.2
-Stable tag: 0.6.0
+Stable tag: 0.6.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ Please add the following code to the `functions.php` in your theme:
 2. Demo search on the Insert Media - Media Library screen.
 
 == Changelog ==
+
+= 0.6.1 =
+* Security update: use `$wpdb->prepare` to process SQL statement. Thanks to [@daxelrod](https://profiles.wordpress.org/daxelrod/) for this.
 
 = 0.6.0 =
 * Add ID to search fields.

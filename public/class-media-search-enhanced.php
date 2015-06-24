@@ -28,7 +28,7 @@ class Media_Search_Enhanced {
 	 *
 	 * @var     string
 	 */
-	const VERSION = '0.6.0';
+	const VERSION = '0.6.1';
 
 	/**
 	 *
@@ -147,16 +147,17 @@ class Media_Search_Enhanced {
 				$pieces['where'] .= " AND $wpdb->posts.post_parent = " . $vars['post_parent'];
 			}
 
-			$pieces['where'] .= " AND ( ($wpdb->posts.ID LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_title LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.guid LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_content LIKE '%" . $vars['s'] . "%') OR ($wpdb->posts.post_excerpt LIKE '%" . $vars['s'] . "%')";
-			$pieces['where'] .= " OR ($wpdb->postmeta.meta_key = '_wp_attachment_image_alt' AND $wpdb->postmeta.meta_value LIKE '%" . $vars['s'] . "%')";
-			$pieces['where'] .= " OR ($wpdb->postmeta.meta_key = '_wp_attached_file' AND $wpdb->postmeta.meta_value LIKE '%" . $vars['s'] . "%')";
+			// Use esc_like to escape slash
+			$like = '%' . $wpdb->esc_like( $vars['s'] ) . '%';
+
+			$pieces['where'] .= $wpdb->prepare( " AND ( ($wpdb->posts.ID LIKE %s) OR ($wpdb->posts.post_title LIKE %s) OR ($wpdb->posts.guid LIKE %s) OR ($wpdb->posts.post_content LIKE %s) OR ($wpdb->posts.post_excerpt LIKE %s)", $like, $like, $like, $like, $like );
+			$pieces['where'] .= $wpdb->prepare( " OR ($wpdb->postmeta.meta_key = '_wp_attachment_image_alt' AND $wpdb->postmeta.meta_value LIKE %s)", $like );
+			$pieces['where'] .= $wpdb->prepare( " OR ($wpdb->postmeta.meta_key = '_wp_attached_file' AND $wpdb->postmeta.meta_value LIKE %s)", $like );
 
 			// Get taxes for attachements
 			$taxes = get_object_taxonomies( 'attachment' );
 			if ( ! empty( $taxes ) ) {
-				$pieces['where'] .= " OR (tter.slug LIKE '%" . $vars['s'] . "%')";
-				$pieces['where'] .= " OR (ttax.description LIKE '%" . $vars['s'] . "%')";
-				$pieces['where'] .= " OR (tter.name LIKE '%" . $vars['s'] . "%')";
+				$pieces['where'] .= $wpdb->prepare( " OR (tter.slug LIKE %s) OR (ttax.description LIKE %s) OR (tter.name LIKE %s)", $like, $like, $like );
 			}
 
 			$pieces['where'] .= " )";
