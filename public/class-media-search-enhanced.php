@@ -28,7 +28,7 @@ class Media_Search_Enhanced {
 	 *
 	 * @var     string
 	 */
-	const VERSION = '0.6.1';
+	const VERSION = '0.7.0';
 
 	/**
 	 *
@@ -141,7 +141,7 @@ class Media_Search_Enhanced {
 
 		// Rewrite the where clause
 		if ( ! empty( $vars['s'] ) && ( ( isset( $_REQUEST['action'] ) && 'query-attachments' == $_REQUEST['action'] ) || 'attachment' == $vars['post_type'] ) ) {
-			$pieces['where'] = " AND $wpdb->posts.post_type = 'attachment' AND ($wpdb->posts.post_status = 'inherit' OR $wpdb->posts.post_status = 'private')";
+			$pieces['where'] .= " AND $wpdb->posts.post_type = 'attachment' AND ($wpdb->posts.post_status = 'inherit' OR $wpdb->posts.post_status = 'private')";
 
 			if ( ! empty( $vars['post_parent'] ) ) {
 				$pieces['where'] .= " AND $wpdb->posts.post_parent = " . $vars['post_parent'];

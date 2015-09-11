@@ -4,8 +4,8 @@ Contributors: 1fixdotio
 Donate link: http://1fix.io/
 Tags: media library, media, attachment
 Requires at least: 3.5
-Tested up to: 4.2.2
-Stable tag: 0.6.1
+Tested up to: 4.3
+Stable tag: 0.7
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ Please add the following code to the `functions.php` in your theme:
 2. Demo search on the Insert Media - Media Library screen.
 
 == Changelog ==
+
+= 0.7.0 =
+* Remove duplicate search results when WPML plugin is activated. Props [@joseluiscruz](https://wordpress.org/support/topic/minor-conflict-with-wpml-media-plugin).
 
 = 0.6.1 =
 * Security update: use `$wpdb->prepare` to process SQL statements. Thanks to [@daxelrod](https://profiles.wordpress.org/daxelrod/) for this.
