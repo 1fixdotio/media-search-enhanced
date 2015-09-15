@@ -28,7 +28,7 @@ class Media_Search_Enhanced {
 	 *
 	 * @var     string
 	 */
-	const VERSION = '0.7.0';
+	const VERSION = '0.7.1';
 
 	/**
 	 *
@@ -141,7 +141,14 @@ class Media_Search_Enhanced {
 
 		// Rewrite the where clause
 		if ( ! empty( $vars['s'] ) && ( ( isset( $_REQUEST['action'] ) && 'query-attachments' == $_REQUEST['action'] ) || 'attachment' == $vars['post_type'] ) ) {
-			$pieces['where'] .= " AND $wpdb->posts.post_type = 'attachment' AND ($wpdb->posts.post_status = 'inherit' OR $wpdb->posts.post_status = 'private')";
+			$pieces['where'] = " AND $wpdb->posts.post_type = 'attachment' AND ($wpdb->posts.post_status = 'inherit' OR $wpdb->posts.post_status = 'private')";
+
+			if ( class_exists('WPML_Media') ) {
+				global $sitepress;
+				//get current language
+				$lang = $sitepress->get_current_language();
+				$pieces['where'] .= $wpdb->prepare( " AND t.element_type='post_attachment' AND t.language_code = %s ", $lang );
+			}
 
 			if ( ! empty( $vars['post_parent'] ) ) {
 				$pieces['where'] .= " AND $wpdb->posts.post_parent = " . $vars['post_parent'];
