@@ -28,7 +28,7 @@ class Media_Search_Enhanced {
 	 *
 	 * @var     string
 	 */
-	const VERSION = '0.7.1';
+	const VERSION = '0.7.2';
 
 	/**
 	 *
@@ -147,7 +147,8 @@ class Media_Search_Enhanced {
 				global $sitepress;
 				//get current language
 				$lang = $sitepress->get_current_language();
-				$pieces['where'] .= $wpdb->prepare( " AND t.element_type='post_attachment' AND t.language_code = %s ", $lang );
+				if ( 'all' != $lang )
+					$pieces['where'] .= $wpdb->prepare( " AND t.element_type='post_attachment' AND t.language_code = %s ", $lang );
 			}
 
 			if ( ! empty( $vars['post_parent'] ) ) {

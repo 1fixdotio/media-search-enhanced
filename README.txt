@@ -5,7 +5,7 @@ Donate link: http://1fix.io/
 Tags: media library, media, attachment
 Requires at least: 3.5
 Tested up to: 4.3
-Stable tag: 0.7.1
+Stable tag: 0.7.2
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ Please add the following code to the `functions.php` in your theme:
 2. Demo search on the Insert Media - Media Library screen.
 
 == Changelog ==
+
+= 0.7.2 =
+* Bug fix: Make the search work with WPML Media - All Languages.
 
 = 0.7.1 =
 * Bug fix: Remove duplicate search results when WPML plugin is activated, THE RIGHT WAY.
