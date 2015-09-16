@@ -77,6 +77,9 @@ class Media_Search_Enhanced {
 		// Change the permalinks at media search results page
 		add_filter( 'attachment_link', array( $this, 'get_the_url' ), 10, 2 );
 
+		// Filter the search form on search page to add post_type hidden field
+		add_filter( 'get_search_form', array( $this, 'search_form_on_search' ) );
+
 	}
 
 	/**
@@ -147,8 +150,7 @@ class Media_Search_Enhanced {
 				global $sitepress;
 				//get current language
 				$lang = $sitepress->get_current_language();
-				if ( 'all' != $lang )
-					$pieces['where'] .= $wpdb->prepare( " AND t.element_type='post_attachment' AND t.language_code = %s ", $lang );
+				$pieces['where'] .= $wpdb->prepare( " AND t.element_type='post_attachment' AND t.language_code = %s ", $lang );
 			}
 
 			if ( ! empty( $vars['post_parent'] ) ) {
@@ -199,13 +201,17 @@ class Media_Search_Enhanced {
 	 *
 	 * @since 0.5.0
 	 */
-	public function search_form() {
+	public function search_form( $form = '' ) {
 
 		$domain = $this->plugin_slug;
 
-		$form = get_search_form( false );
+		$placeholder = ( empty ( get_query_var( 's' ) ) ) ? apply_filters( 'mse_search_form_placeholder', __( 'Search Media...', $domain ) ) : get_query_var( 's' );
+
+		if ( empty( $form ) )
+			$form = get_search_form( false );
+
 		$form = preg_replace( "/(form.*class=\")(.\S*)\"/", '$1$2 ' . apply_filters( 'mse_search_form_class', 'mse-search-form' ) . '"', $form );
-		$form = preg_replace( "/placeholder=\"(.\S)*\"/", 'placeholder="' . apply_filters( 'mse_search_form_placeholder', __( 'Search Media...', $domain ) ) . '"', $form );
+		$form = preg_replace( "/placeholder=\"(.\S)*\"/", 'placeholder="' . $placeholder . '"', $form );
 		$form = str_replace( '</form>', '<input type="hidden" name="post_type" value="attachment" /></form>', $form );
 
 		$result = apply_filters( 'mse_search_form', $form );
@@ -261,6 +267,23 @@ class Media_Search_Enhanced {
 		}
 
 		return $link;
+	}
+
+	/**
+	 * Filter the search form on search page to add post_type hidden field
+	 *
+	 * @param  string $form The search form.
+	 * @return string The filtered search form
+	 *
+	 * @since 0.7.2
+	 */
+	public function search_form_on_search( $form ) {
+
+		if ( is_search() && is_main_query() && isset( $_GET['post_type'] ) && 'attachment' == $_GET['post_type'] ) {
+			$form = $this->search_form( $form );
+		}
+
+		return $form;
 	}
 
 }
