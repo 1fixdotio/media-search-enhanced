@@ -68,6 +68,7 @@ Please add the following code to the `functions.php` in your theme:
 = 0.7.2 =
 * Bug fix: Make the search work with WPML Media - All languages.
 * Filter the search form if it's on the media search results page.
+* Make the images clickable in the search results. Can be disabled by setting the filter `mse_is_image_clickable` to `false`.
 
 = 0.7.1 =
 * Bug fix: Remove duplicate search results when WPML plugin is activated, THE RIGHT WAY.

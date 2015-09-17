@@ -242,7 +242,22 @@ class Media_Search_Enhanced {
 			$params = apply_filters( 'mse_get_attachment_image_params', $params );
 			extract( $params );
 
-			$html = wp_get_attachment_image( $attachment_id, $size, $icon, $attr );
+			$html = '';
+			$clickable = apply_filters( 'mse_is_image_clickable', true );
+			if ( $clickable ) {
+				$html .= '<a href="' . get_attachment_link( $attachment_id ) . '"';
+				$attr = apply_filters( 'wp_get_attachment_image_attributes', $attr, $post, $size );
+				$attr = array_map( 'esc_attr', $attr );
+				foreach ( $attr as $name => $value ) {
+					$html .= " $name=" . '"' . $value . '"';
+				}
+				$html .= '>';
+			}
+
+			$html .= wp_get_attachment_image( $attachment_id, $size, $icon, $attr );
+
+			if ( $clickable )
+				$html .= '</a>';
 
 			$excerpt .= $html;
 		}
