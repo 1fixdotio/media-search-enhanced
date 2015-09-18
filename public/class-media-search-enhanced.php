@@ -204,8 +204,9 @@ class Media_Search_Enhanced {
 	public function search_form( $form = '' ) {
 
 		$domain = $this->plugin_slug;
+		$s = get_query_var( 's' );
 
-		$placeholder = ( empty ( get_query_var( 's' ) ) ) ? apply_filters( 'mse_search_form_placeholder', __( 'Search Media...', $domain ) ) : get_query_var( 's' );
+		$placeholder = ( empty ( $s ) ) ? apply_filters( 'mse_search_form_placeholder', __( 'Search Media...', $domain ) ) : $s;
 
 		if ( empty( $form ) )
 			$form = get_search_form( false );
