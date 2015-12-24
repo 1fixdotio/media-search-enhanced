@@ -238,7 +238,7 @@ class Media_Search_Enhanced {
 				'attachment_id' => $post->ID,
 				'size' => 'thumbnail',
 				'icon' => false,
-				'attr' => ''
+				'attr' => array()
 				);
 			$params = apply_filters( 'mse_get_attachment_image_params', $params );
 			extract( $params );
