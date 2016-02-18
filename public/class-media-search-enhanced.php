@@ -28,7 +28,7 @@ class Media_Search_Enhanced {
 	 *
 	 * @var     string
 	 */
-	const VERSION = '0.7.3';
+	const VERSION = '0.8.0';
 
 	/**
 	 *
@@ -150,16 +150,38 @@ class Media_Search_Enhanced {
 				global $sitepress;
 				//get current language
 				$lang = $sitepress->get_current_language();
-				$pieces['where'] .= $wpdb->prepare( " AND t.element_type='post_attachment' AND t.language_code = %s ", $lang );
+				$pieces['where'] .= $wpdb->prepare( " AND t.element_type='post_attachment' AND t.language_code = %s", $lang );
 			}
 
 			if ( ! empty( $vars['post_parent'] ) ) {
 				$pieces['where'] .= " AND $wpdb->posts.post_parent = " . $vars['post_parent'];
+			} elseif ( 0 === $vars['post_parent'] ) {
+				// Get unattached attachments
+				$pieces['where'] .= " AND $wpdb->posts.post_parent = 0";
 			}
 
-			// Use esc_like to escape slash
-			$like = '%' . $wpdb->esc_like( $vars['s'] ) . '%';
+			if ( ! empty( $vars['post_mime_type'] ) ) {
+				// Use esc_like to escape slash
+				$like = '%' . $wpdb->esc_like( $vars['post_mime_type'] ) . '%';
+				$pieces['where'] .= $wpdb->prepare( " AND $wpdb->posts.post_mime_type LIKE %s", $like );
+			}
 
+			if ( ! empty( $vars['m'] ) ) {
+				$year = substr( $vars['m'], 0, 4 );
+				$monthnum = substr( $vars['m'], 4 );
+				$pieces['where'] .= $wpdb->prepare( " AND YEAR($wpdb->posts.post_date) = %d AND MONTH($wpdb->posts.post_date) = %d", $year, $monthnum );
+			} else {
+				if ( ! empty( $vars['year'] ) && 'false' != $vars['year'] ) {
+					$pieces['where'] .= $wpdb->prepare( " AND YEAR($wpdb->posts.post_date) = %d", $vars['year'] );
+				}
+
+				if ( ! empty( $vars['monthnum'] ) && 'false' != $vars['monthnum'] ) {
+					$pieces['where'] .= $wpdb->prepare( " AND MONTH($wpdb->posts.post_date) = %d", $vars['monthnum'] );
+				}
+			}
+
+			// search for keyword "s"
+			$like = '%' . $wpdb->esc_like( $vars['s'] ) . '%';
 			$pieces['where'] .= $wpdb->prepare( " AND ( ($wpdb->posts.ID LIKE %s) OR ($wpdb->posts.post_title LIKE %s) OR ($wpdb->posts.guid LIKE %s) OR ($wpdb->posts.post_content LIKE %s) OR ($wpdb->posts.post_excerpt LIKE %s)", $like, $like, $like, $like, $like );
 			$pieces['where'] .= $wpdb->prepare( " OR ($wpdb->postmeta.meta_key = '_wp_attachment_image_alt' AND $wpdb->postmeta.meta_value LIKE %s)", $like );
 			$pieces['where'] .= $wpdb->prepare( " OR ($wpdb->postmeta.meta_key = '_wp_attached_file' AND $wpdb->postmeta.meta_value LIKE %s)", $like );
