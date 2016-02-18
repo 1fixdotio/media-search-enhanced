@@ -5,7 +5,7 @@ Donate link: http://1fix.io/
 Tags: media library, media, attachment
 Requires at least: 3.5
 Tested up to: 4.4.2
-Stable tag: 0.7.3
+Stable tag: 0.8.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ Please add the following code to the `functions.php` in your theme:
 2. Demo search on the Insert Media - Media Library screen.
 
 == Changelog ==
+
+= 0.8.0 =
+* Supporting MIME type and date filters when searching in the Media Library. Thanks to [@jedifunk](https://wordpress.org/support/topic/results-filters) for spotting this bug.
 
 = 0.7.3 =
 * Fix PHP warnings. Thanks to [@DavidOn3](https://wordpress.org/support/topic/warning-message-in-search-result-page).
