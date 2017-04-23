@@ -46,11 +46,13 @@ class Media_Search_Enhanced_Admin {
 	 * @since     0.0.1
 	 */
 	private function __construct() {
-            
+                        
             add_action( 'admin_menu', array($this, 'mse_add_admin_menu' ));
             
-            //AJAX Call
+            //AJAX call
             add_action( 'admin_footer', array($this, 'ajax_script' ));
+            
+            //AJAX handler
             add_action( 'wp_ajax_approal_action', array($this, 'ajax_handler' ));
 	}
 
@@ -71,17 +73,29 @@ class Media_Search_Enhanced_Admin {
 		return self::$instance;
 	}
         
+        /**
+         * Adds a menu entry to the wordpress backend
+         * 
+         * @since 0.7.3
+         * 
+         */
         public function mse_add_admin_menu(  ) { 
 
                 add_options_page( 'Media Search Enhanced', 'Media Search Enhanced', 'manage_options', 'media_search_enhanced', array($this, 'mse_options_page' ));
 
         } 
-
+        
+        /**
+         * Generates the admin page on the wordpress backend.
+         * 
+         * @since 0.7.3
+         * 
+         */
         public function mse_options_page(  ) {                                      
             ?>
             
             <div class="wrap">
-                                
+                <!-- Success and error messages -->
                 <div style="display: none" id="notice-success" class="notice notice-success">
                     <p>Settings saved.</p>
                 </div>
@@ -90,11 +104,14 @@ class Media_Search_Enhanced_Admin {
                     <p>An error ocoured while saving your settings. Please, try it again.</p>
                 </div>                
                 
+                <!-- The setting form -->
+                
                 <h1>Media Search Settings</h1>
                 <br>
+                
                 <?php 
-                            settings_fields( 'mse_settings' );
-                            do_settings_sections( 'mse_settings' );
+                    settings_fields( 'mse_settings' );
+                    do_settings_sections( 'mse_settings' );
                 ?>
                 
                 <h3>Search results</h3>
@@ -125,8 +142,13 @@ class Media_Search_Enhanced_Admin {
                 </div>
             </div>
             <?php
-        }        
+        }                
         
+        /**
+         * Sends the ajax request to the server. uses the wp built in jquery library
+         * 
+         * @since 0.7.3
+         */
         public function ajax_script() {
             ?>
             <script type="text/javascript" >
@@ -163,7 +185,14 @@ class Media_Search_Enhanced_Admin {
             </script>
             <?php
         }
-                        
+         
+        /**
+         * Handles the data of the ajax call and saves it via the wp update_option function
+         * 
+         * @since 0.7.3
+         * 
+         * @return jsonObject       Sends back the json encoded data array.
+         */
         public function ajax_handler() {
             $jsArray = array();
             $jsArray[ 'image_size' ] =  $_POST[ 'image_size' ];
