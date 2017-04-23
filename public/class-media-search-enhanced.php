@@ -236,7 +236,7 @@ class Media_Search_Enhanced {
 		if ( ! is_admin() && is_search() && 'attachment' == $post->post_type ) {
 			$params = array(
 				'attachment_id' => $post->ID,
-				'size' => 'thumbnail',
+				'size' => get_option('image_size', 'thumbnail'),
 				'icon' => false,
 				'attr' => array()
 				);
