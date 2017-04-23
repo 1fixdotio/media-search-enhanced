@@ -97,16 +97,26 @@ class Media_Search_Enhanced_Admin {
                             do_settings_sections( 'mse_settings' );
                 ?>
                 
-                <h3>Search results: image size</h3>
+                <h3>Search results</h3>
+                <h4>Image size to be loaded (eg. large): 
                 <input id="image_size" type="text" name="image_size" value="<?php echo get_option('image_size', 'thumbnail'); ?>">
+                </h4>                
                 
-                <h3>Search results: show image? </h3>
-                <input id="show_image" type="checkbox" value="1" <?php echo get_option( 'show_image', 'checked' ); ?>>
+                <h4>Where do you want to display the excerpt?
+                    <select id="excerpt_display">
+                        <option value="above" <?php echo get_option( 'excerpt_display', '') == "above" ? "selected":""; ?>>above the image</option>
+                        <option value="underneath" <?php echo get_option( 'excerpt_display', '') == "underneath" ? "selected":""; ?>>underneath</option>
+                        <option value="none" <?php echo get_option( 'excerpt_display', '') == "none" ? "selected":""; ?>>do not display</option>
+                    </select>
+                </h4>
                 
+                <h4>Add an unique css id to the excerpt. (eg. mse-image-exerpt)
+                    <input id="excerpt_id" type="text" value="<?php echo get_option( 'excerpt_id', 'mse-image-excerpt'); ?>">
+                </h4>
                 
+                <h3>Shortcode</h3>
+                <h4>Shortcode for the frontend: [mse-search-form]</h4>
                 
-                <br>
-                <br>
                 <br>
                 <button id="save_settings">Save Settings</button>
                 
@@ -125,15 +135,14 @@ class Media_Search_Enhanced_Admin {
 
                     //get the values from the form
                     var image_size = $( '#image_size' ).val();
-                    var show_image = $( '#show_image' ).val();
-                    
-                    console.log(show_image);
+                    var excerpt_display = $( '#excerpt_display' ).find( ':selected' ).val();
+                    var excerpt_id = $( '#excerpt_id' ).val();
                     
                     //send the ajax request to the ajax handler
                     $.ajax({
                         method: "POST",
                         url: ajaxurl,
-                        data: { 'action': 'approal_action', 'image_size': image_size, 'show_image': show_image }
+                        data: { 'action': 'approal_action', 'image_size': image_size, 'excerpt_display': excerpt_display, 'excerpt_id': excerpt_id }
                     })                
 
                     .done(function( data ) {
@@ -157,11 +166,13 @@ class Media_Search_Enhanced_Admin {
                         
         public function ajax_handler() {
             $jsArray = array();
-            $jsArray[ 'image_size' ] = $_POST[ 'image_size' ];
-            //$jsArray[ 'show_image' ] = $_POST[ 'show_image' ];
+            $jsArray[ 'image_size' ] =  $_POST[ 'image_size' ];
+            $jsArray[ 'excerpt_display' ] = $_POST[ 'excerpt_display' ];
+            $jsArray[ 'excerpt_id' ] = $_POST[ 'excerpt_id' ];
             
             update_option( 'image_size', $jsArray[ 'image_size' ]);
-            //udpate_option( 'show_image', $jsArray[ 'show_image' ]);
+            update_option( 'excerpt_display', $jsArray[ 'excerpt_display' ]);
+            update_option( 'excerpt_id', $jsArray[ 'excerpt_id' ]);
             
             echo json_encode($jsArray);
             wp_die(); // just to be safe

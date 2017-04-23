@@ -34,9 +34,7 @@ if ( ! defined( 'WPINC' ) ) {
  *----------------------------------------------------------------------------*/
 
 require_once( plugin_dir_path( __FILE__ ) . 'public/class-media-search-enhanced.php' );
-if(is_admin()){
-    require_once( plugin_dir_path( __FILE__ ) . 'admin/class-media-search-enhanced-admin.php' );
-}
+require_once( plugin_dir_path( __FILE__ ) . 'admin/class-media-search-enhanced-admin.php' );
 
 /*
  * Register hooks that are fired when the plugin is activated or deactivated.
