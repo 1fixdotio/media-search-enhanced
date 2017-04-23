@@ -260,7 +260,8 @@ class Media_Search_Enhanced {
 			if ( $clickable )
 				$html .= '</a>';
 
-			//check if excerpt should be displayed above or underneath the image or not
+			//check if excerpt should be displayed above or underneath the image or not.
+                        //Adds the css excerpt id
                         if(get_option( 'excerpt_display' ) == 'above') {
                             $excerpt = "<div id='".get_option( 'excerpt_id' )."'>".$excerpt."</div>".$html;
                         }
