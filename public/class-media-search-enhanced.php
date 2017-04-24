@@ -258,7 +258,7 @@ class Media_Search_Enhanced {
 		if ( ! is_admin() && is_search() && 'attachment' == $post->post_type ) {
 			$params = array(
 				'attachment_id' => $post->ID,
-				'size' => 'thumbnail',
+				'size' => get_option('image_size', 'thumbnail'),
 				'icon' => false,
 				'attr' => array()
 				);
@@ -282,7 +282,15 @@ class Media_Search_Enhanced {
 			if ( $clickable )
 				$html .= '</a>';
 
-			$excerpt .= $html;
+			//check if excerpt should be displayed above or underneath the image or not.
+                        //Adds the css excerpt id
+                        if(get_option( 'excerpt_display' ) == 'above') {
+                            $excerpt = "<div id='".get_option( 'excerpt_id' )."'>".$excerpt."</div>".$html;
+                        }
+                        
+                        else if(get_option( 'excerpt_display' ) == 'underneath') {
+                            $excerpt = $html."<div id='".get_option( 'excerpt_id' )."'>".$excerpt."</div>";
+                        }
 		}
 
 		return $excerpt;
