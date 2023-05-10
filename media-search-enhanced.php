@@ -8,13 +8,13 @@
  * @author    1fixdotio <1fixdotio@gmail.com>
  * @license   GPL-2.0+
  * @link      http://1fix.io/media-search-enhanced
- * @copyright 2014 1Fix.io
+ * @copyright 2014-19 1Fix.io
  *
  * @wordpress-plugin
  * Plugin Name:       Media Search Enhanced
  * Plugin URI:        http://1fix.io/media-search-enhanced
  * Description:       Search through all fields in Media Library.
- * Version:           0.8.0
+ * Version:           0.8.1
  * Author:            1fixdotio
  * Author URI:        http://1fix.io
  * Text Domain:       media-search-enhanced
