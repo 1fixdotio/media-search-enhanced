@@ -1,11 +1,11 @@
 === Media Search Enhanced ===
 
 Contributors: 1fixdotio
-Donate link: http://1fix.io/
+Donate link: https://1fix.io/
 Tags: media library, media, attachment
 Requires at least: 3.5
-Tested up to: 6.1.1
-Stable tag: 0.8.1
+Tested up to: 6.3.2
+Stable tag: 0.8.2
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ Please add the following code to the `functions.php` in your theme:
 2. Demo search on the Insert Media - Media Library screen.
 
 == Changelog ==
+
+= 0.8.2 =
+* Fix issue where `post_mime_type` was an array
 
 = 0.8.1 =
 * Fix PHP notices and updated the "Tested up to" field.
