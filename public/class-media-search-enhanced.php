@@ -161,15 +161,15 @@ class Media_Search_Enhanced {
 			}
 
 			if ( ! empty( $vars['post_mime_type'] ) ) {
-					$mime_types = is_array( $vars['post_mime_type'] ) ? $vars['post_mime_type'] : [ $vars['post_mime_type'] ];
-					$like_clauses = array();
+				$mime_types = is_array( $vars['post_mime_type'] ) ? $vars['post_mime_type'] : [ $vars['post_mime_type'] ];
+				$like_clauses = array();
 
-					foreach( $mime_types as $mime_type ) {
-							$mime_type_like = '%' . $wpdb->esc_like( $mime_type ) . '%';
-							$like_clauses[] = "$wpdb->posts.post_mime_type LIKE '$mime_type_like'";
-					}
+				foreach ( $mime_types as $mime_type ) {
+					$mime_type_like = '%' . $wpdb->esc_like( $mime_type ) . '%';
+					$like_clauses[] = $wpdb->prepare( "$wpdb->posts.post_mime_type LIKE %s", $mime_type_like );
+				}
 
-					$pieces['where'] .= " AND (" . implode( ' OR ', $like_clauses ) . ")";
+				$pieces['where'] .= " AND (" . implode( ' OR ', $like_clauses ) . ")";
 			}
 
 			if ( ! empty( $vars['m'] ) ) {
