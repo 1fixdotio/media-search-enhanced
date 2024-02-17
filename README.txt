@@ -66,8 +66,8 @@ Please add the following code to the `functions.php` in your theme:
 == Changelog ==
 
 = 0.9.0 =
-* Fixed an issue when searching for images in the Image block, the plugin caused the HTTP 500 error. Thanks to [@larodiel](https://github.com/1fixdotio/media-search-enhanced/pull/4).
-* Added the languages pt_BR and es_ES. Also thanks to [@larodiel](https://github.com/1fixdotio/media-search-enhanced/pull/4).
+* Added the languages pt_BR and es_ES. Thanks to [@larodiel](https://github.com/1fixdotio/media-search-enhanced/pull/4).
+* Fixed an issue when searching for images in the Image block, the plugin caused the HTTP 500 error. Also thanks to [@larodiel](https://github.com/1fixdotio/media-search-enhanced/pull/4).
 
 = 0.8.1 =
 * Fix PHP notices and updated the "Tested up to" field.
