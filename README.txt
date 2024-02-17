@@ -4,8 +4,8 @@ Contributors: 1fixdotio
 Donate link: https://1fix.io/
 Tags: media library, media, attachment
 Requires at least: 3.5
-Tested up to: 6.3.2
-Stable tag: 0.8.2
+Tested up to: 6.4.3
+Stable tag: 0.9.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,8 +65,9 @@ Please add the following code to the `functions.php` in your theme:
 
 == Changelog ==
 
-= 0.8.2 =
-* Fix issue where `post_mime_type` was an array
+= 0.9.0 =
+* Fixed an issue when searching for images in the Image block, the plugin caused the HTTP 500 error. Thanks to [@larodiel](https://github.com/1fixdotio/media-search-enhanced/pull/4).
+* Added the languages pt_BR and es_ES. Also thanks to [@larodiel](https://github.com/1fixdotio/media-search-enhanced/pull/4).
 
 = 0.8.1 =
 * Fix PHP notices and updated the "Tested up to" field.
