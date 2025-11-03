@@ -5,7 +5,7 @@ Donate link: https://1fix.io/
 Tags: media library, media, attachment
 Requires at least: 3.5
 Tested up to: 6.4.3
-Stable tag: 0.9.0
+Stable tag: 0.9.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ Please add the following code to the `functions.php` in your theme:
 2. Demo search on the Insert Media - Media Library screen.
 
 == Changelog ==
+
+= 0.9.1 =
+* Fix: Prevent "Not unique table/alias: wp_postmeta" SQL error by aliasing the postmeta JOIN. Props [@mikemeinz](https://wordpress.org/support/users/mikemeinz/). See https://wordpress.org/support/topic/sql-syntax-error-26/
 
 = 0.9.0 =
 * Added the languages pt_BR and es_ES. Thanks to [@larodiel](https://github.com/1fixdotio/media-search-enhanced/pull/4).
