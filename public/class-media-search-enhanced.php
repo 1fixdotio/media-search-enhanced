@@ -192,7 +192,7 @@ class Media_Search_Enhanced {
 			$pieces['where'] .= $wpdb->prepare( " OR (mse_pm.meta_key = '_wp_attachment_image_alt' AND mse_pm.meta_value LIKE %s)", $like );
 			$pieces['where'] .= $wpdb->prepare( " OR (mse_pm.meta_key = '_wp_attached_file' AND mse_pm.meta_value LIKE %s)", $like );
 
-			// Get taxes for attachements
+			// Get taxes for attachments
 			$taxes = get_object_taxonomies( 'attachment' );
 			if ( ! empty( $taxes ) ) {
 				$pieces['where'] .= $wpdb->prepare( " OR (tter.slug LIKE %s) OR (ttax.description LIKE %s) OR (tter.name LIKE %s)", $like, $like, $like );
