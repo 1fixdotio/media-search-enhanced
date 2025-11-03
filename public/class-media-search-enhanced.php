@@ -202,7 +202,7 @@ class Media_Search_Enhanced {
 
 			$pieces['join'] .= " LEFT JOIN $wpdb->postmeta AS mse_pm ON $wpdb->posts.ID = mse_pm.post_id";
 
-			// Get taxes for attachements
+			// Get taxes for attachments
 			$taxes = get_object_taxonomies( 'attachment' );
 			if ( ! empty( $taxes ) ) {
 				$on = array();
