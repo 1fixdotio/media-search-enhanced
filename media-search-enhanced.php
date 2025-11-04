@@ -23,7 +23,7 @@
  * Domain Path:       /languages
  * GitHub Plugin URI: https://github.com/1fixdotio/media-search-enhanced
  * Requires at least: 3.5
- * Tested up to:      6.4.3
+ * Tested up to:      6.8.3
  */
 
 // If this file is called directly, abort.

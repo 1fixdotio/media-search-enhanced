@@ -1,10 +1,10 @@
 === Media Search Enhanced ===
 
-Contributors: 1fixdotio
+Contributors: 1fixdotio, yoren
 Donate link: https://1fix.io/
 Tags: media library, media, attachment
 Requires at least: 3.5
-Tested up to: 6.4.3
+Tested up to: 6.8.3
 Stable tag: 0.9.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
