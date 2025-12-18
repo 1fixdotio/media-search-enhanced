@@ -159,7 +159,7 @@ class Media_Search_Enhanced {
 					$pieces['where'] .= $wpdb->prepare( " AND $wpdb->posts.post_parent = %d", $post_parent );
 				} elseif ( 0 === $post_parent ) {
 					// Get unattached attachments
-					$pieces['where'] .= " AND $wpdb->posts.post_parent = 0";
+					$pieces['where'] .= $wpdb->prepare( " AND $wpdb->posts.post_parent = %d", 0 );
 				}
 			}
 
