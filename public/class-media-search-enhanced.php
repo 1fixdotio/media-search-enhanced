@@ -153,11 +153,14 @@ class Media_Search_Enhanced {
 				$pieces['where'] .= $wpdb->prepare( " AND t.element_type='post_attachment' AND t.language_code = %s", $lang );
 			}
 
-			if ( ! empty( $vars['post_parent'] ) ) {
-				$pieces['where'] .= " AND $wpdb->posts.post_parent = " . $vars['post_parent'];
-			} elseif ( isset( $vars['post_parent'] ) && 0 === $vars['post_parent'] ) {
-				// Get unattached attachments
-				$pieces['where'] .= " AND $wpdb->posts.post_parent = 0";
+			if ( isset( $vars['post_parent'] ) ) {
+				$post_parent = absint( $vars['post_parent'] );
+				if ( $post_parent > 0 ) {
+					$pieces['where'] .= $wpdb->prepare( " AND $wpdb->posts.post_parent = %d", $post_parent );
+				} elseif ( 0 === $post_parent ) {
+					// Get unattached attachments
+					$pieces['where'] .= " AND $wpdb->posts.post_parent = 0";
+				}
 			}
 
 			if ( ! empty( $vars['post_mime_type'] ) ) {
@@ -207,7 +210,8 @@ class Media_Search_Enhanced {
 			if ( ! empty( $taxes ) ) {
 				$on = array();
 				foreach ( $taxes as $tax ) {
-					$on[] = "ttax.taxonomy = '$tax'";
+					$tax = sanitize_key( $tax );
+					$on[] = $wpdb->prepare( "ttax.taxonomy = %s", $tax );
 				}
 				$on = '( ' . implode( ' OR ', $on ) . ' )';
 
