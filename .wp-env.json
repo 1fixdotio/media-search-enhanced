@@ -5,8 +5,5 @@
 	"testsPort": 8889,
 	"mappings": {
 		"wp-content/spx-data": "./benchmarks"
-	},
-    "lifecycleScripts": {
-        "afterStart": "npx @wordpress/env run wordpress \"bash -c 'rm -rf /tmp/spx && ln -s /var/www/html/wp-content/spx-data /tmp/spx'\""
-    }
+	}
 }

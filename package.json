@@ -1,0 +1,13 @@
+{
+  "name": "media-search-enhanced",
+  "version": "0.9.1",
+  "description": "Search through all fields in Media Library.",
+  "scripts": {
+    "env:start": "wp-env start --spx && npm run env:fix-spx",
+    "env:fix-spx": "wp-env run wordpress \"bash -c 'mkdir -p /var/www/html/wp-content/spx-data && rm -rf /tmp/spx && ln -s /var/www/html/wp-content/spx-data /tmp/spx'\"",
+    "env:stop": "wp-env stop"
+  },
+  "devDependencies": {
+    "@wordpress/env": "^10.0.0"
+  }
+}
