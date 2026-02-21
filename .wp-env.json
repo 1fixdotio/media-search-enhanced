@@ -5,6 +5,6 @@
 	"testsPort": 8889,
 	"mappings": {
 		"wp-content/spx-data": "./benchmarks",
-        "spx-custom.ini": "/usr/local/etc/php/conf.d/spx-custom.ini"
+        "/usr/local/etc/php/conf.d/spx-custom.ini": "./spx-custom.ini"
 	}
 }
