@@ -1,0 +1,12 @@
+{
+  "name": "media-search-enhanced",
+  "version": "0.9.3",
+  "description": "Search through all fields in Media Library.",
+  "scripts": {
+    "env:start": "wp-env start --spx",
+    "env:stop": "wp-env stop"
+  },
+  "devDependencies": {
+    "@wordpress/env": "^10.0.0"
+  }
+}
