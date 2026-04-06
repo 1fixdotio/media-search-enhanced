@@ -27,14 +27,15 @@ class SearchTest extends WP_UnitTestCase {
 
 		// The plugin reads search params from global $wp_query->query_vars,
 		// so we must temporarily set them for the filter to activate.
-		$original_vars       = $wp_query->query_vars;
+		$original_vars        = $wp_query->query_vars;
 		$wp_query->query_vars = $args;
 
-		$query = new WP_Query( $args );
-
-		$wp_query->query_vars = $original_vars;
-
-		return $query->posts;
+		try {
+			$query = new WP_Query( $args );
+			return $query->posts;
+		} finally {
+			$wp_query->query_vars = $original_vars;
+		}
 	}
 
 	/**
@@ -331,9 +332,9 @@ class SearchTest extends WP_UnitTestCase {
 
 		// Save and replace $wp_query with one that has empty query_vars.
 		global $wp_query, $wpdb;
-		$original_wp_query       = $wp_query;
-		$wp_query                = new WP_Query();
-		$wp_query->query_vars    = array();
+		$original_wp_query    = $wp_query;
+		$wp_query             = new WP_Query();
+		$wp_query->query_vars = array();
 
 		$pieces = array(
 			'where'    => " AND {$wpdb->posts}.post_type = 'attachment' AND {$wpdb->posts}.post_status = 'inherit'",
@@ -345,11 +346,12 @@ class SearchTest extends WP_UnitTestCase {
 			'groupby'  => '',
 		);
 
-		$result = Media_Search_Enhanced::posts_clauses( $pieces );
-
-		// Restore globals.
-		$wp_query = $original_wp_query;
-		unset( $_REQUEST['action'], $_REQUEST['query'] );
+		try {
+			$result = Media_Search_Enhanced::posts_clauses( $pieces );
+		} finally {
+			$wp_query = $original_wp_query;
+			unset( $_REQUEST['action'], $_REQUEST['query'] );
+		}
 
 		// Verify the WHERE clause was rewritten to include our search conditions.
 		$this->assertStringContainsString( 'ajax-fallback-test', $result['where'], 'The fallback path should inject the search term into the WHERE clause.' );
