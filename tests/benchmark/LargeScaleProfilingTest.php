@@ -54,7 +54,7 @@ class LargeScaleProfilingTest extends WP_UnitTestCase {
 	 * Profile a search query and log detailed results.
 	 */
 	public function test_large_scale_query_profiling() {
-		global $wpdb;
+		global $wpdb, $wp_query;
 
 		$wpdb->queries = array();
 		if ( ! defined( 'SAVEQUERIES' ) ) {
@@ -62,16 +62,25 @@ class LargeScaleProfilingTest extends WP_UnitTestCase {
 		}
 
 		$search = 'profiling-attachment';
-		$start  = microtime( true );
 
-		$query = new WP_Query( array(
+		$args = array(
 			'post_type'   => 'attachment',
 			'post_status' => 'inherit',
 			's'           => $search,
 			'fields'      => 'ids',
-		) );
+		);
+
+		// The plugin reads from global $wp_query->query_vars.
+		$original_vars        = $wp_query->query_vars;
+		$wp_query->query_vars = $args;
+
+		$start = microtime( true );
+
+		$query = new WP_Query( $args );
 
 		$elapsed = microtime( true ) - $start;
+
+		$wp_query->query_vars = $original_vars;
 
 		// Find the main query SQL.
 		$captured_sql = '';
