@@ -78,8 +78,6 @@ install_wp() {
 		download https://wordpress.org/${ARCHIVE_NAME}.tar.gz $TMPDIR/wordpress.tar.gz
 		tar --strip-components=1 -zxmf $TMPDIR/wordpress.tar.gz -C $WP_CORE_DIR
 	fi
-
-	download https://raw.githubusercontent.com/marber/wp-config-for-testing/refs/heads/main/wp-config-for-testing.php $WP_CORE_DIR/wp-tests-config.php
 }
 
 install_test_suite() {
