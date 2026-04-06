@@ -1,6 +1,15 @@
 /.wordpress-org
 /.git
 /.github
+/bin
+/tests
+/vendor
+/node_modules
+/benchmarks
+/.playwright-cli
 .gitignore
 .distignore
 .DS_Store
+composer.json
+composer.lock
+phpunit.xml

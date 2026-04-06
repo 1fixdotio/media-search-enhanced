@@ -44,6 +44,27 @@ This plugin is made for:
 3. Upload the `media-search-enhanced` directory to the `/wp-content/plugins/` directory
 4. Activate the plugin in the Plugin dashboard
 
+== Development ==
+
+= Running Tests =
+
+1. Install Composer dependencies: `composer install`
+2. Set up the WordPress test database: `bash bin/install-wp-tests.sh <db-name> <db-user> <db-pass> [db-host] [wp-version]`
+3. Run the test suite: `vendor/bin/phpunit`
+
+Additional test commands:
+
+* Run benchmark tests: `composer test:benchmark`
+* Run all tests except slow profiling tests: `composer test:no-slow`
+
+= Local Performance Profiling =
+
+For realistic performance testing with 5,000+ attachments:
+
+`vendor/bin/phpunit --group slow`
+
+This is excluded from CI and default test runs due to the time required to seed the database.
+
 == Frequently Asked Questions ==
 
 = How to link media to the file itself rather than the attachment page in media search results page? =
