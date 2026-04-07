@@ -356,6 +356,6 @@ class SearchTest extends WP_UnitTestCase {
 		// Verify the WHERE clause was rewritten to include our search conditions.
 		$this->assertStringContainsString( 'ajax-fallback-test', $result['where'], 'The fallback path should inject the search term into the WHERE clause.' );
 		$this->assertStringContainsString( 'post_title LIKE', $result['where'], 'The fallback path should search post_title.' );
-		$this->assertStringContainsString( 'mse_pm.meta_key', $result['where'], 'The fallback path should search postmeta.' );
+		$this->assertStringContainsString( 'EXISTS', $result['where'], 'The fallback path should use EXISTS subqueries for postmeta.' );
 	}
 }
