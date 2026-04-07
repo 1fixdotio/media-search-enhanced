@@ -96,15 +96,48 @@ class SearchTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Test 4: Search by ID.
-	 *
-	 * Note: Current code uses `ID LIKE '%term%'` which matches partial IDs.
-	 * Issue #10 Phase 2 will change this to exact integer match.
+	 * Test 4: Search by exact ID.
 	 */
 	public function test_search_by_id() {
 		$id = $this->create_attachment( array( 'post_title' => 'id-search-test' ) );
 		$results = $this->search_attachments( (string) $id );
 		$this->assertContains( $id, $results );
+	}
+
+	/**
+	 * Test 4b: Search by ID with leading zeros (e.g. "007" matches ID 7).
+	 */
+	public function test_search_by_id_with_leading_zeros() {
+		$id = $this->create_attachment( array( 'post_title' => 'leading-zero-id-test' ) );
+		$padded = str_pad( (string) $id, strlen( (string) $id ) + 2, '0', STR_PAD_LEFT );
+		$results = $this->search_attachments( $padded );
+		$this->assertContains( $id, $results, "Search for '{$padded}' should find ID {$id}." );
+	}
+
+	/**
+	 * Test 4c: Partial numeric search should NOT match IDs.
+	 *
+	 * With exact integer match, searching "12" should not find ID 123.
+	 * The attachment is only findable if its other fields match.
+	 */
+	public function test_partial_numeric_does_not_match_id() {
+		$id = $this->create_attachment( array( 'post_title' => 'partial-numeric-test' ) );
+		$partial = substr( (string) $id, 0, -1 );
+		if ( strlen( $partial ) > 0 && $partial !== (string) $id ) {
+			$results = $this->search_attachments( $partial );
+			$this->assertNotContains( $id, $results, "Search for '{$partial}' should not match ID {$id} via partial ID match." );
+		} else {
+			$this->markTestSkipped( 'ID is single digit, cannot test partial match.' );
+		}
+	}
+
+	/**
+	 * Test 4d: Non-numeric search should not match any ID.
+	 */
+	public function test_non_numeric_search_does_not_match_ids() {
+		$id = $this->create_attachment( array( 'post_title' => 'non-numeric-id-unique-xyz' ) );
+		$results = $this->search_attachments( 'zzz-no-match-anywhere' );
+		$this->assertNotContains( $id, $results );
 	}
 
 	/**
