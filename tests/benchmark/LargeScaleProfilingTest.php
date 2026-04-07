@@ -3,6 +3,9 @@
  * Large-scale profiling tests — local only, excluded from CI.
  *
  * Run with: vendor/bin/phpunit --group slow
+ * Set MSE_PROFILE_COUNT env var to control attachment count (default: 5000).
+ *
+ * Example: MSE_PROFILE_COUNT=20000 vendor/bin/phpunit --group slow
  *
  * @group slow
  */
@@ -14,12 +17,18 @@ class LargeScaleProfilingTest extends WP_UnitTestCase {
 	private static $attachment_ids = array();
 
 	/**
-	 * Seed 5,000+ attachments for realistic volume testing.
+	 * @var int Number of attachments seeded.
+	 */
+	private static $count = 0;
+
+	/**
+	 * Seed attachments for volume testing.
+	 * Count is controlled by MSE_PROFILE_COUNT env var (default: 5000).
 	 */
 	public static function wpSetUpBeforeClass( $factory ) {
-		$count = 5000;
+		self::$count = (int) getenv( 'MSE_PROFILE_COUNT' ) ?: 5000;
 
-		for ( $i = 0; $i < $count; $i++ ) {
+		for ( $i = 0; $i < self::$count; $i++ ) {
 			$id = $factory->attachment->create( array(
 				'post_title'     => "profiling-attachment-{$i}",
 				'post_status'    => 'inherit',
@@ -97,7 +106,7 @@ class LargeScaleProfilingTest extends WP_UnitTestCase {
 		$explain = $wpdb->get_results( 'EXPLAIN ' . $captured_sql );
 
 		// Detailed log output.
-		$log  = "\n=== Large-Scale Profiling (5,000 attachments) ===\n";
+		$log  = sprintf( "\n=== Large-Scale Profiling (%s attachments) ===\n", number_format( self::$count ) );
 		$log .= sprintf( "Results found: %d\n", $query->found_posts );
 		$log .= sprintf( "Query time: %.4f seconds\n", $elapsed );
 		$log .= "SQL:\n" . $captured_sql . "\n\n";

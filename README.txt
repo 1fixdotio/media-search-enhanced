@@ -59,9 +59,13 @@ Additional test commands:
 
 = Local Performance Profiling =
 
-For realistic performance testing with 5,000+ attachments:
+For realistic performance testing with 5,000 attachments (default):
 
-`vendor/bin/phpunit --group slow`
+`composer test:profile`
+
+Set `MSE_PROFILE_COUNT` to control the number of seeded attachments:
+
+`MSE_PROFILE_COUNT=20000 composer test:profile`
 
 This is excluded from CI and default test runs due to the time required to seed the database.
 
