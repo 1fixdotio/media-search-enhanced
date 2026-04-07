@@ -193,9 +193,10 @@ class Media_Search_Enhanced {
 			$like = '%' . $wpdb->esc_like( $vars['s'] ) . '%';
 
 			// Use exact integer match for ID when search term is numeric; skip ID match otherwise.
-			$search_int = absint( $vars['s'] );
-			if ( $search_int > 0 && (string) $search_int === trim( $vars['s'] ) ) {
-				$id_condition = $wpdb->prepare( "($wpdb->posts.ID = %d)", $search_int );
+			$search_trimmed = trim( $vars['s'] );
+			$search_int     = absint( $search_trimmed );
+			if ( $search_int > 0 && ctype_digit( $search_trimmed ) ) {
+				$id_condition = sprintf( "($wpdb->posts.ID = %d)", $search_int );
 			} else {
 				$id_condition = '(1=0)';
 			}
