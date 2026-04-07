@@ -63,9 +63,9 @@ For realistic performance testing with 5,000 attachments (default):
 
 `composer test:profile`
 
-Set `MSE_PROFILE_COUNT` to control the number of seeded attachments:
+Specify a custom count for heavier profiling:
 
-`MSE_PROFILE_COUNT=20000 composer test:profile`
+`composer test:profile -- 20000`
 
 This is excluded from CI and default test runs due to the time required to seed the database.
 
