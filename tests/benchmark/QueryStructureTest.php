@@ -142,14 +142,35 @@ class QueryStructureTest extends WP_UnitTestCase {
 		);
 	}
 
-	public function test_current_query_uses_id_like() {
+	public function test_numeric_search_uses_id_equals() {
 		$result = $this->capture_query( '12345' );
 
 		$this->assertNotEmpty( $result['sql'], 'Should have captured the search SQL.' );
-		$this->assertMatchesRegularExpression(
+		$this->assertDoesNotMatchRegularExpression(
 			'/\.ID\s+LIKE/i',
 			$result['sql'],
-			'Current query should use ID LIKE (not integer comparison).'
+			'Numeric search should not use ID LIKE.'
+		);
+		$this->assertMatchesRegularExpression(
+			'/\.ID\s*=\s*\'?12345/i',
+			$result['sql'],
+			'Numeric search should use ID = integer comparison.'
+		);
+	}
+
+	public function test_non_numeric_search_skips_id_match() {
+		$result = $this->capture_query( 'benchmark-attachment' );
+
+		$this->assertNotEmpty( $result['sql'], 'Should have captured the search SQL.' );
+		$this->assertDoesNotMatchRegularExpression(
+			'/\.ID\s+LIKE/i',
+			$result['sql'],
+			'Non-numeric search should not use ID LIKE.'
+		);
+		$this->assertDoesNotMatchRegularExpression(
+			'/\.ID\s*=/i',
+			$result['sql'],
+			'Non-numeric search should not use ID = either.'
 		);
 	}
 
