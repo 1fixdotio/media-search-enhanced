@@ -1,0 +1,15 @@
+{
+	"name": "1fixdotio/media-search-enhanced",
+	"description": "WordPress plugin to enhance media library search",
+	"type": "wordpress-plugin",
+	"license": "GPL-2.0-or-later",
+	"require-dev": {
+		"phpunit/phpunit": "^9.6",
+		"yoast/phpunit-polyfills": "^2.0"
+	},
+	"scripts": {
+		"test": "phpunit",
+		"test:benchmark": "phpunit --group benchmark",
+		"test:profile": "bin/profile.sh"
+	}
+}
