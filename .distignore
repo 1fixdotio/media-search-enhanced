@@ -13,3 +13,4 @@
 composer.json
 composer.lock
 phpunit.xml
+CONTRIBUTING.md
