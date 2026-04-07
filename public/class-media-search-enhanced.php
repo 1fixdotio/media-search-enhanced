@@ -218,10 +218,12 @@ class Media_Search_Enhanced {
 				}
 				$tax_filter = '( ' . implode( ' OR ', $tax_where ) . ' )';
 
-				$pieces['where'] .= $wpdb->prepare(
-					" OR EXISTS (SELECT 1 FROM $wpdb->term_relationships AS tr INNER JOIN $wpdb->term_taxonomy AS tt ON (tr.term_taxonomy_id = tt.term_taxonomy_id AND $tax_filter) INNER JOIN $wpdb->terms AS t ON (tt.term_id = t.term_id) WHERE tr.object_id = $wpdb->posts.ID AND (t.slug LIKE %s OR tt.description LIKE %s OR t.name LIKE %s))",
-					$like, $like, $like
-				);
+				$pieces['where'] .= " OR EXISTS (SELECT 1 FROM $wpdb->term_relationships AS tr"
+					. " INNER JOIN $wpdb->term_taxonomy AS tt ON (tr.term_taxonomy_id = tt.term_taxonomy_id AND $tax_filter)"
+					. " INNER JOIN $wpdb->terms AS t ON (tt.term_id = t.term_id)"
+					. " WHERE tr.object_id = $wpdb->posts.ID AND ("
+					. $wpdb->prepare( "t.slug LIKE %s OR tt.description LIKE %s OR t.name LIKE %s", $like, $like, $like )
+					. "))";
 			}
 
 			$pieces['where'] .= " )";

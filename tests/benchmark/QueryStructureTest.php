@@ -123,7 +123,23 @@ class QueryStructureTest extends WP_UnitTestCase {
 		$result = $this->capture_query( 'benchmark-attachment' );
 
 		$this->assertNotEmpty( $result['sql'], 'Should have captured the search SQL.' );
-		$this->assertStringContainsString( 'EXISTS', $result['sql'], 'Query should use EXISTS subqueries.' );
+
+		$exists_count = substr_count( $result['sql'], 'EXISTS' );
+		$this->assertGreaterThanOrEqual( 2, $exists_count, 'Query should have at least 2 EXISTS subqueries (alt text + filename).' );
+
+		// Verify postmeta EXISTS subqueries are correlated to the outer query.
+		$this->assertMatchesRegularExpression(
+			'/EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+\S+postmeta\s+WHERE\s+\S+postmeta\.post_id\s*=\s*\S+posts\.ID/i',
+			$result['sql'],
+			'EXISTS subquery should correlate postmeta.post_id to posts.ID.'
+		);
+
+		// Verify taxonomy EXISTS subquery is correlated.
+		$this->assertMatchesRegularExpression(
+			'/EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+\S+term_relationships\s+AS\s+tr\b.*?tr\.object_id\s*=\s*\S+posts\.ID/is',
+			$result['sql'],
+			'Taxonomy EXISTS subquery should correlate tr.object_id to posts.ID.'
+		);
 	}
 
 	public function test_current_query_uses_id_like() {
