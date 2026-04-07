@@ -191,9 +191,18 @@ class Media_Search_Enhanced {
 
 			// search for keyword "s"
 			$like = '%' . $wpdb->esc_like( $vars['s'] ) . '%';
+
+			// Use exact integer match for ID when search term is numeric; skip ID match otherwise.
+			$search_int = absint( $vars['s'] );
+			if ( $search_int > 0 && (string) $search_int === trim( $vars['s'] ) ) {
+				$id_condition = $wpdb->prepare( "($wpdb->posts.ID = %d)", $search_int );
+			} else {
+				$id_condition = '(1=0)';
+			}
+
 			$pieces['where'] .= $wpdb->prepare(
-				" AND ( ($wpdb->posts.ID LIKE %s) OR ($wpdb->posts.post_title LIKE %s) OR ($wpdb->posts.guid LIKE %s) OR ($wpdb->posts.post_content LIKE %s) OR ($wpdb->posts.post_excerpt LIKE %s)",
-				$like, $like, $like, $like, $like
+				" AND ( $id_condition OR ($wpdb->posts.post_title LIKE %s) OR ($wpdb->posts.guid LIKE %s) OR ($wpdb->posts.post_content LIKE %s) OR ($wpdb->posts.post_excerpt LIKE %s)",
+				$like, $like, $like, $like
 			);
 
 			// Alt text — EXISTS subquery instead of LEFT JOIN
