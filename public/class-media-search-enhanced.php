@@ -191,34 +191,40 @@ class Media_Search_Enhanced {
 
 			// search for keyword "s"
 			$like = '%' . $wpdb->esc_like( $vars['s'] ) . '%';
-			$pieces['where'] .= $wpdb->prepare( " AND ( ($wpdb->posts.ID LIKE %s) OR ($wpdb->posts.post_title LIKE %s) OR ($wpdb->posts.guid LIKE %s) OR ($wpdb->posts.post_content LIKE %s) OR ($wpdb->posts.post_excerpt LIKE %s)", $like, $like, $like, $like, $like );
-			$pieces['where'] .= $wpdb->prepare( " OR (mse_pm.meta_key = '_wp_attachment_image_alt' AND mse_pm.meta_value LIKE %s)", $like );
-			$pieces['where'] .= $wpdb->prepare( " OR (mse_pm.meta_key = '_wp_attached_file' AND mse_pm.meta_value LIKE %s)", $like );
+			$pieces['where'] .= $wpdb->prepare(
+				" AND ( ($wpdb->posts.ID LIKE %s) OR ($wpdb->posts.post_title LIKE %s) OR ($wpdb->posts.guid LIKE %s) OR ($wpdb->posts.post_content LIKE %s) OR ($wpdb->posts.post_excerpt LIKE %s)",
+				$like, $like, $like, $like, $like
+			);
 
-			// Get taxes for attachments
+			// Alt text — EXISTS subquery instead of LEFT JOIN
+			$pieces['where'] .= $wpdb->prepare(
+				" OR EXISTS (SELECT 1 FROM $wpdb->postmeta WHERE $wpdb->postmeta.post_id = $wpdb->posts.ID AND $wpdb->postmeta.meta_key = '_wp_attachment_image_alt' AND $wpdb->postmeta.meta_value LIKE %s)",
+				$like
+			);
+
+			// Filename — EXISTS subquery instead of LEFT JOIN
+			$pieces['where'] .= $wpdb->prepare(
+				" OR EXISTS (SELECT 1 FROM $wpdb->postmeta WHERE $wpdb->postmeta.post_id = $wpdb->posts.ID AND $wpdb->postmeta.meta_key = '_wp_attached_file' AND $wpdb->postmeta.meta_value LIKE %s)",
+				$like
+			);
+
+			// Taxonomy — EXISTS subquery instead of LEFT JOIN
 			$taxes = get_object_taxonomies( 'attachment' );
 			if ( ! empty( $taxes ) ) {
-				$pieces['where'] .= $wpdb->prepare( " OR (tter.slug LIKE %s) OR (ttax.description LIKE %s) OR (tter.name LIKE %s)", $like, $like, $like );
+				$tax_where = array();
+				foreach ( $taxes as $tax ) {
+					$tax = sanitize_key( $tax );
+					$tax_where[] = $wpdb->prepare( "tt.taxonomy = %s", $tax );
+				}
+				$tax_filter = '( ' . implode( ' OR ', $tax_where ) . ' )';
+
+				$pieces['where'] .= $wpdb->prepare(
+					" OR EXISTS (SELECT 1 FROM $wpdb->term_relationships AS tr INNER JOIN $wpdb->term_taxonomy AS tt ON (tr.term_taxonomy_id = tt.term_taxonomy_id AND $tax_filter) INNER JOIN $wpdb->terms AS t ON (tt.term_id = t.term_id) WHERE tr.object_id = $wpdb->posts.ID AND (t.slug LIKE %s OR tt.description LIKE %s OR t.name LIKE %s))",
+					$like, $like, $like
+				);
 			}
 
 			$pieces['where'] .= " )";
-
-			$pieces['join'] .= " LEFT JOIN $wpdb->postmeta AS mse_pm ON $wpdb->posts.ID = mse_pm.post_id";
-
-			// Get taxes for attachments
-			$taxes = get_object_taxonomies( 'attachment' );
-			if ( ! empty( $taxes ) ) {
-				$on = array();
-				foreach ( $taxes as $tax ) {
-					$tax = sanitize_key( $tax );
-					$on[] = $wpdb->prepare( "ttax.taxonomy = %s", $tax );
-				}
-				$on = '( ' . implode( ' OR ', $on ) . ' )';
-
-				$pieces['join'] .= " LEFT JOIN $wpdb->term_relationships AS trel ON ($wpdb->posts.ID = trel.object_id) LEFT JOIN $wpdb->term_taxonomy AS ttax ON (" . $on . " AND trel.term_taxonomy_id = ttax.term_taxonomy_id) LEFT JOIN $wpdb->terms AS tter ON (ttax.term_id = tter.term_id) ";
-			}
-
-			$pieces['distinct'] = 'DISTINCT';
 
 			$pieces['orderby'] = "$wpdb->posts.post_date DESC";
 		}

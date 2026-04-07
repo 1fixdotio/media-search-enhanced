@@ -96,37 +96,34 @@ class QueryStructureTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Assert current query structure (pre-#10 refactor).
+	 * Assert query structure after #10 Phase 1 refactor.
 	 *
-	 * These assertions document the CURRENT query behavior. When #10 is
-	 * implemented, update them to reflect the new expected structure:
-	 *
-	 * Phase 1: flip to expect EXISTS, no DISTINCT, no LEFT JOIN postmeta
+	 * Phase 1: EXISTS subqueries replace LEFT JOINs, DISTINCT removed.
 	 * Phase 2: add assertion for ID = instead of ID LIKE
 	 */
-	public function test_current_query_uses_distinct() {
+	public function test_query_does_not_use_distinct() {
 		$result = $this->capture_query( 'benchmark-attachment' );
 
 		$this->assertNotEmpty( $result['sql'], 'Should have captured the search SQL.' );
-		$this->assertStringContainsString( 'DISTINCT', $result['sql'], 'Current query should use DISTINCT.' );
+		$this->assertStringNotContainsString( 'DISTINCT', $result['sql'], 'Query should not use DISTINCT after EXISTS refactor.' );
 	}
 
-	public function test_current_query_uses_left_join_postmeta() {
+	public function test_query_does_not_use_left_join_postmeta() {
 		$result = $this->capture_query( 'benchmark-attachment' );
 
 		$this->assertNotEmpty( $result['sql'], 'Should have captured the search SQL.' );
-		$this->assertMatchesRegularExpression(
+		$this->assertDoesNotMatchRegularExpression(
 			'/LEFT JOIN\s+\S+postmeta\s+AS\s+mse_pm/i',
 			$result['sql'],
-			'Current query should LEFT JOIN postmeta as mse_pm.'
+			'Query should not LEFT JOIN postmeta after EXISTS refactor.'
 		);
 	}
 
-	public function test_current_query_does_not_use_exists() {
+	public function test_query_uses_exists_subqueries() {
 		$result = $this->capture_query( 'benchmark-attachment' );
 
 		$this->assertNotEmpty( $result['sql'], 'Should have captured the search SQL.' );
-		$this->assertStringNotContainsString( 'EXISTS', $result['sql'], 'Current query should not use EXISTS subqueries.' );
+		$this->assertStringContainsString( 'EXISTS', $result['sql'], 'Query should use EXISTS subqueries.' );
 	}
 
 	public function test_current_query_uses_id_like() {
