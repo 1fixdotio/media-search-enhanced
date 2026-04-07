@@ -54,8 +54,7 @@ This plugin is made for:
 
 Additional test commands:
 
-* Run benchmark tests: `composer test:benchmark`
-* Run all tests except slow profiling tests: `composer test:no-slow`
+* Run benchmark tests only: `composer test:benchmark`
 
 = Local Performance Profiling =
 

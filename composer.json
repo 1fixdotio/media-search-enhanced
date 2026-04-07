@@ -10,7 +10,6 @@
 	"scripts": {
 		"test": "phpunit",
 		"test:benchmark": "phpunit --group benchmark",
-		"test:no-slow": "phpunit --exclude-group slow",
 		"test:profile": "bin/profile.sh"
 	}
 }
