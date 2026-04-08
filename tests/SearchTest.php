@@ -115,15 +115,42 @@ class SearchTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Test 4c: Numeric search finds the exact ID, not partial matches.
+	 * Test 4c: Numeric search uses exact ID match, not partial LIKE.
 	 *
-	 * Searching "999999" (an ID that doesn't exist) should not return
-	 * unrelated attachments — verifying ID uses = not LIKE.
+	 * Verifies via SQL inspection that searching "12" produces ID = 12,
+	 * not ID LIKE '%12%'. A results-based test is unreliable here because
+	 * GUIDs contain the post ID (e.g. ?p=123 matches LIKE '%12%').
 	 */
-	public function test_numeric_search_for_nonexistent_id() {
-		$id = $this->create_attachment( array( 'post_title' => 'numeric-exact-test' ) );
-		$results = $this->search_attachments( '999999' );
-		$this->assertNotContains( $id, $results, 'Search for non-existent ID should not match unrelated attachment.' );
+	public function test_numeric_search_uses_exact_id_in_sql() {
+		global $wpdb, $wp_query;
+
+		$wpdb->queries = array();
+
+		$args = array(
+			'post_type'   => 'attachment',
+			'post_status' => 'inherit',
+			's'           => '12',
+			'fields'      => 'ids',
+		);
+		$original_vars        = $wp_query->query_vars;
+		$wp_query->query_vars = $args;
+		try {
+			new WP_Query( $args );
+		} finally {
+			$wp_query->query_vars = $original_vars;
+		}
+
+		$captured_sql = '';
+		foreach ( $wpdb->queries as $q ) {
+			if ( stripos( $q[0], 'SELECT' ) !== false && stripos( $q[0], "'attachment'" ) !== false ) {
+				$captured_sql = $q[0];
+				break;
+			}
+		}
+
+		$this->assertNotEmpty( $captured_sql, 'Should have captured the search SQL.' );
+		$this->assertMatchesRegularExpression( '/\.ID\s*=\s/', $captured_sql, 'Numeric search should use ID = (exact match).' );
+		$this->assertDoesNotMatchRegularExpression( '/\.ID\s+LIKE/i', $captured_sql, 'Numeric search should not use ID LIKE (partial match).' );
 	}
 
 	/**
