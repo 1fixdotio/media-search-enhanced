@@ -28,7 +28,7 @@ class Media_Search_Enhanced {
 	 *
 	 * @var     string
 	 */
-	const VERSION = '0.9.2';
+	const VERSION = '1.0.0';
 
 	/**
 	 *
@@ -139,7 +139,7 @@ class Media_Search_Enhanced {
 			$vars = ( isset( $_REQUEST['query'] ) ) ? $_REQUEST['query'] : array();
 		}
 
-		return ! empty( $vars['s'] )
+		return ! empty( $vars['s'] ) && is_string( $vars['s'] )
 			&& ( ( isset( $_REQUEST['action'] ) && 'query-attachments' == $_REQUEST['action'] )
 				|| ( isset( $vars['post_type'] ) && 'attachment' == $vars['post_type'] ) );
 	}
