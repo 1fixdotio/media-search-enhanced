@@ -147,6 +147,11 @@ class Media_Search_Enhanced {
 			$status_clause = "$wpdb->posts.post_status = 'inherit'";
 			if ( current_user_can( 'read_private_posts' ) ) {
 				$status_clause .= " OR $wpdb->posts.post_status = 'private'";
+			} elseif ( is_user_logged_in() ) {
+				$status_clause .= $wpdb->prepare(
+					" OR ($wpdb->posts.post_status = 'private' AND $wpdb->posts.post_author = %d)",
+					get_current_user_id()
+				);
 			}
 			$pieces['where'] = " AND $wpdb->posts.post_type = 'attachment' AND ($status_clause)";
 
