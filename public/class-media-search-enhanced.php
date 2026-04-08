@@ -144,7 +144,16 @@ class Media_Search_Enhanced {
 
 		// Rewrite the where clause
 		if ( ! empty( $vars['s'] ) && ( ( isset( $_REQUEST['action'] ) && 'query-attachments' == $_REQUEST['action'] ) || 'attachment' == $vars['post_type'] ) ) {
-			$pieces['where'] = " AND $wpdb->posts.post_type = 'attachment' AND ($wpdb->posts.post_status = 'inherit' OR $wpdb->posts.post_status = 'private')";
+			$status_clause = "$wpdb->posts.post_status = 'inherit'";
+			if ( current_user_can( 'read_private_posts' ) ) {
+				$status_clause .= " OR $wpdb->posts.post_status = 'private'";
+			} elseif ( is_user_logged_in() ) {
+				$status_clause .= $wpdb->prepare(
+					" OR ($wpdb->posts.post_status = 'private' AND $wpdb->posts.post_author = %d)",
+					get_current_user_id()
+				);
+			}
+			$pieces['where'] = " AND $wpdb->posts.post_type = 'attachment' AND ($status_clause)";
 
 			if ( class_exists('WPML_Media') ) {
 				global $sitepress;
@@ -262,7 +271,7 @@ class Media_Search_Enhanced {
 			$form = get_search_form( false );
 
 		$form = preg_replace( "/(form.*class=\")(.\S*)\"/", '$1$2 ' . apply_filters( 'mse_search_form_class', 'mse-search-form' ) . '"', $form );
-		$form = preg_replace( "/placeholder=\"(.\S)*\"/", 'placeholder="' . $placeholder . '"', $form );
+		$form = preg_replace( "/placeholder=\"(.\S)*\"/", 'placeholder="' . esc_attr( $placeholder ) . '"', $form );
 		$form = str_replace( '</form>', '<input type="hidden" name="post_type" value="attachment" /></form>', $form );
 
 		$result = apply_filters( 'mse_search_form', $form );
