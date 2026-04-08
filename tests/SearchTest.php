@@ -391,4 +391,34 @@ class SearchTest extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'post_title LIKE', $result['where'], 'The fallback path should search post_title.' );
 		$this->assertStringContainsString( 'EXISTS', $result['where'], 'The fallback path should use EXISTS subqueries for postmeta.' );
 	}
+
+	/**
+	 * Test 18: Authors can find their own private attachments but not others'.
+	 */
+	public function test_author_sees_own_private_attachment() {
+		$author_a = self::factory()->user->create( array( 'role' => 'author' ) );
+		$author_b = self::factory()->user->create( array( 'role' => 'author' ) );
+
+		$own_private = $this->create_attachment( array(
+			'post_title'  => 'private-own-attachment',
+			'post_status' => 'private',
+			'post_author' => $author_a,
+		) );
+		$other_private = $this->create_attachment( array(
+			'post_title'  => 'private-other-attachment',
+			'post_status' => 'private',
+			'post_author' => $author_b,
+		) );
+		$public = $this->create_attachment( array(
+			'post_title'  => 'private-public-attachment',
+			'post_status' => 'inherit',
+		) );
+
+		wp_set_current_user( $author_a );
+		$results = $this->search_attachments( 'private' );
+
+		$this->assertContains( $own_private, $results, 'Author should find their own private attachment.' );
+		$this->assertNotContains( $other_private, $results, 'Author should not find another author\'s private attachment.' );
+		$this->assertContains( $public, $results, 'Author should find public attachments.' );
+	}
 }
