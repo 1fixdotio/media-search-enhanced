@@ -23,8 +23,8 @@ bash bin/install-wp-tests.sh <db-name> <db-user> <db-pass> [db-host] [wp-version
 
 | Command | What it runs |
 |---|---|
-| `composer test` | 17 correctness tests + 5 benchmark structural tests (fast, ~3s) |
-| `composer test:benchmark` | Only the 5 benchmark structural tests |
+| `composer test` | Correctness tests + benchmark structural tests (fast, ~3-4s) |
+| `composer test:benchmark` | Only the benchmark structural tests |
 | `composer test:profile` | Large-scale profiling with 5,000 attachments (slow) |
 | `composer test:profile -- 20000` | Profiling with custom attachment count |
 
@@ -40,7 +40,7 @@ When working on query changes (e.g., [#10](https://github.com/1fixdotio/media-se
 composer test
 ```
 
-The 17 correctness tests in `tests/SearchTest.php` verify that search results are correct across all fields (title, alt text, filename, ID, GUID, taxonomy, etc.) and all filters (MIME type, date, post parent). These must pass before and after any refactoring.
+The correctness tests in `tests/SearchTest.php` verify that search results are correct across all fields (title, alt text, filename, ID, GUID, taxonomy, etc.), all filters (MIME type, date, post parent), multi-term comma search, and private attachment visibility. These must pass before and after any refactoring.
 
 If a test fails after your change, a search field or filter is broken.
 
@@ -48,22 +48,16 @@ If a test fails after your change, a search field or filter is broken.
 
 The benchmark tests in `tests/benchmark/QueryStructureTest.php` assert on the **generated SQL string**, not on results. They document the expected query shape.
 
-**Current assertions (pre-#10):**
+**Current assertions:**
 
 | Test | Asserts |
 |---|---|
-| `test_current_query_uses_distinct` | SQL contains `DISTINCT` |
-| `test_current_query_uses_left_join_postmeta` | SQL contains `LEFT JOIN ... postmeta AS mse_pm` |
-| `test_current_query_does_not_use_exists` | SQL does **not** contain `EXISTS` |
-| `test_current_query_uses_id_like` | SQL uses `ID LIKE` (string comparison) |
-
-**How to update for #10:**
-
-When implementing each phase of #10, flip the relevant assertions:
-
-- **Phase 1** (EXISTS subqueries): Change to assert `EXISTS` present, `DISTINCT` absent, `LEFT JOIN postmeta` absent
-- **Phase 2** (ID integer match): Change to assert `ID =` instead of `ID LIKE`
-- **Phase 3** (multi-term search): Add new assertions for comma-separated OR groups
+| `test_query_does_not_use_distinct` | SQL does **not** contain `DISTINCT` |
+| `test_query_does_not_use_left_join_postmeta` | SQL does **not** contain `LEFT JOIN ... postmeta AS mse_pm` |
+| `test_query_uses_exists_subqueries` | SQL contains `EXISTS` with correct correlation structure |
+| `test_numeric_search_uses_id_equals` | SQL uses `ID =` (integer comparison) |
+| `test_non_numeric_search_skips_id_match` | SQL uses neither `ID LIKE` nor `ID =` for text searches |
+| `test_multi_term_search_generates_or_groups` | Multi-term SQL contains both terms with multiple EXISTS groups |
 
 If the structural tests pass, the query is shaped as intended.
 
@@ -92,13 +86,11 @@ The profiling output includes:
 
 **What to look for in EXPLAIN:**
 
-| Column | Before (JOINs + DISTINCT) | After (EXISTS) |
-|---|---|---|
-| Extra | `Using temporary; Using filesort` | Neither present |
-| select_type | `SIMPLE` (flat join) | `DEPENDENT SUBQUERY` |
-| rows | High (row multiplication from JOINs) | Lower (EXISTS short-circuits) |
-
-The `Using temporary` disappears because `DISTINCT` is no longer needed. This is the single biggest performance indicator.
+| Column | What to check |
+|---|---|
+| Extra | Should **not** contain `Using temporary` (indicates DISTINCT overhead) |
+| select_type | `DEPENDENT SUBQUERY` rows indicate EXISTS subqueries are in use |
+| key | Should show index usage (e.g. `type_status_date`, `meta_key`, `PRIMARY`) |
 
 ### PR checklist for SQL changes
 

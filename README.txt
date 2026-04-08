@@ -70,8 +70,10 @@ Please add the following code to the `functions.php` in your theme:
 * New: Multi-term search — use commas to search for multiple items at once in the admin media modal (e.g. `sunset.jpg, logo.png`). Limited to 10 terms. Only available in the admin media modal; frontend searches treat commas as literal characters.
 * Performance: Replaced LEFT JOINs + DISTINCT with EXISTS subqueries, eliminating temporary tables and improving search speed up to 10x on large media libraries.
 * Performance: Numeric searches (e.g. searching by attachment ID) now use exact integer matching instead of string comparison, enabling primary key index usage.
+* Compatibility: The plugin no longer overwrites the entire WHERE clause. Conditions from WordPress core and other plugins are now preserved.
 * Security: Fixed reflected XSS in the search form placeholder.
 * Security: Private attachments are now only visible to users with appropriate permissions (editors/admins see all; authors see only their own).
+* Developer: Added `mse_max_search_terms` filter to customize the multi-term cap (default 10). Added `mse_is_media_modal_request` filter to customize where multi-term search is allowed.
 
 = 0.9.2 =
 * Security enhancements.
