@@ -115,20 +115,42 @@ class SearchTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Test 4c: Partial numeric search should NOT match IDs.
+	 * Test 4c: Numeric search uses exact ID match, not partial LIKE.
 	 *
-	 * With exact integer match, searching "12" should not find ID 123.
-	 * The attachment is only findable if its other fields match.
+	 * Verifies via SQL inspection that searching "12" produces ID = 12,
+	 * not ID LIKE '%12%'. A results-based test is unreliable here because
+	 * GUIDs contain the post ID (e.g. ?p=123 matches LIKE '%12%').
 	 */
-	public function test_partial_numeric_does_not_match_id() {
-		$id = $this->create_attachment( array( 'post_title' => 'partial-numeric-test' ) );
-		$partial = substr( (string) $id, 0, -1 );
-		if ( strlen( $partial ) > 0 && $partial !== (string) $id ) {
-			$results = $this->search_attachments( $partial );
-			$this->assertNotContains( $id, $results, "Search for '{$partial}' should not match ID {$id} via partial ID match." );
-		} else {
-			$this->markTestSkipped( 'ID is single digit, cannot test partial match.' );
+	public function test_numeric_search_uses_exact_id_in_sql() {
+		global $wpdb, $wp_query;
+
+		$wpdb->queries = array();
+
+		$args = array(
+			'post_type'   => 'attachment',
+			'post_status' => 'inherit',
+			's'           => '12',
+			'fields'      => 'ids',
+		);
+		$original_vars        = $wp_query->query_vars;
+		$wp_query->query_vars = $args;
+		try {
+			new WP_Query( $args );
+		} finally {
+			$wp_query->query_vars = $original_vars;
 		}
+
+		$captured_sql = '';
+		foreach ( $wpdb->queries as $q ) {
+			if ( stripos( $q[0], 'SELECT' ) !== false && stripos( $q[0], "'attachment'" ) !== false ) {
+				$captured_sql = $q[0];
+				break;
+			}
+		}
+
+		$this->assertNotEmpty( $captured_sql, 'Should have captured the search SQL.' );
+		$this->assertMatchesRegularExpression( '/\.ID\s*=\s/', $captured_sql, 'Numeric search should use ID = (exact match).' );
+		$this->assertDoesNotMatchRegularExpression( '/\.ID\s+LIKE/i', $captured_sql, 'Numeric search should not use ID LIKE (partial match).' );
 	}
 
 	/**
@@ -357,7 +379,7 @@ class SearchTest extends WP_UnitTestCase {
 		$id = $this->create_attachment( array( 'post_title' => 'ajax-fallback-test' ) );
 
 		// Simulate the AJAX media modal request.
-		$_REQUEST['action'] = 'query-attachments';
+		add_filter( 'mse_is_media_modal_request', '__return_true' );
 		$_REQUEST['query']  = array(
 			's'         => 'ajax-fallback-test',
 			'post_type' => 'attachment',
@@ -380,7 +402,7 @@ class SearchTest extends WP_UnitTestCase {
 		);
 
 		try {
-			$result = Media_Search_Enhanced::posts_clauses( $pieces );
+			$result = Media_Search_Enhanced::posts_clauses( $pieces, $wp_query );
 		} finally {
 			$wp_query = $original_wp_query;
 			unset( $_REQUEST['action'], $_REQUEST['query'] );
@@ -420,5 +442,139 @@ class SearchTest extends WP_UnitTestCase {
 		$this->assertContains( $own_private, $results, 'Author should find their own private attachment.' );
 		$this->assertNotContains( $other_private, $results, 'Author should not find another author\'s private attachment.' );
 		$this->assertContains( $public, $results, 'Author should find public attachments.' );
+	}
+
+	/**
+	 * Test 19: Comma-separated search finds attachments matching ANY term.
+	 * Multi-term search is restricted to the admin media modal context.
+	 */
+	public function test_comma_separated_search() {
+		add_filter( 'mse_is_media_modal_request', '__return_true' );
+
+		$id_a = $this->create_attachment( array( 'post_title' => 'alpha-comma-test' ) );
+		$id_b = $this->create_attachment( array( 'post_title' => 'bravo-comma-test' ) );
+		$id_c = $this->create_attachment( array( 'post_title' => 'charlie-no-match' ) );
+
+		try {
+			$results = $this->search_attachments( 'alpha-comma-test, bravo-comma-test' );
+		} finally {
+			remove_filter( 'mse_is_media_modal_request', '__return_true' );
+		}
+
+		$this->assertContains( $id_a, $results, 'Should find attachment matching first term.' );
+		$this->assertContains( $id_b, $results, 'Should find attachment matching second term.' );
+		$this->assertNotContains( $id_c, $results, 'Should not find attachment matching neither term.' );
+	}
+
+	/**
+	 * Test 19: Single term without comma behaves identically to before.
+	 */
+	public function test_single_term_without_comma_unchanged() {
+		$id = $this->create_attachment( array( 'post_title' => 'singleton-search-test' ) );
+		$no_match = $this->create_attachment( array( 'post_title' => 'unrelated-thing' ) );
+
+		$results = $this->search_attachments( 'singleton-search-test' );
+
+		$this->assertContains( $id, $results );
+		$this->assertNotContains( $no_match, $results );
+	}
+
+	/**
+	 * Test 20: Comma-separated search across different fields.
+	 */
+	public function test_comma_search_across_fields() {
+		add_filter( 'mse_is_media_modal_request', '__return_true' );
+
+		$id_by_title = $this->create_attachment( array( 'post_title' => 'multi-field-title-match' ) );
+		$id_by_alt   = $this->create_attachment( array( 'post_title' => 'unrelated-alt-holder' ) );
+		update_post_meta( $id_by_alt, '_wp_attachment_image_alt', 'multi-field-alt-match' );
+
+		try {
+			$results = $this->search_attachments( 'multi-field-title-match, multi-field-alt-match' );
+		} finally {
+			remove_filter( 'mse_is_media_modal_request', '__return_true' );
+		}
+
+		$this->assertContains( $id_by_title, $results, 'Should find attachment matching by title.' );
+		$this->assertContains( $id_by_alt, $results, 'Should find attachment matching by alt text.' );
+	}
+
+	/**
+	 * Test 21: Empty terms from extra commas are ignored.
+	 */
+	public function test_comma_search_ignores_empty_terms() {
+		add_filter( 'mse_is_media_modal_request', '__return_true' );
+
+		$id = $this->create_attachment( array( 'post_title' => 'empty-comma-test' ) );
+
+		try {
+			$results = $this->search_attachments( ',, empty-comma-test ,,' );
+		} finally {
+			remove_filter( 'mse_is_media_modal_request', '__return_true' );
+		}
+
+		$this->assertContains( $id, $results, 'Should find attachment despite extra commas.' );
+	}
+
+	/**
+	 * Test 21b: Frontend search treats commas literally (no splitting).
+	 */
+	public function test_frontend_comma_search_is_literal() {
+		// No $_REQUEST['action'] = 'query-attachments' — simulates frontend search.
+		$id_a = $this->create_attachment( array( 'post_title' => 'frontend-alpha-test' ) );
+		$id_b = $this->create_attachment( array( 'post_title' => 'frontend-bravo-test' ) );
+
+		$results = $this->search_attachments( 'frontend-alpha-test, frontend-bravo-test' );
+
+		$this->assertEmpty( $results, 'Frontend comma search should be literal (no split), matching nothing.' );
+	}
+
+	/**
+	 * Test 21c: All-commas search returns no results (not all attachments).
+	 * Must be authenticated to exercise the comma-splitting + empty guard path.
+	 */
+	public function test_all_commas_search_returns_empty() {
+		add_filter( 'mse_is_media_modal_request', '__return_true' );
+
+		$id = $this->create_attachment( array( 'post_title' => 'should-not-appear' ) );
+
+		try {
+			$results = $this->search_attachments( ',,,' );
+		} finally {
+			remove_filter( 'mse_is_media_modal_request', '__return_true' );
+		}
+
+		$this->assertEmpty( $results, 'Search with only commas should return no results.' );
+	}
+
+	/**
+	 * Test 22: Terms are capped at 10.
+	 */
+	public function test_comma_search_caps_at_10_terms() {
+		add_filter( 'mse_is_media_modal_request', '__return_true' );
+
+		// Use non-overlapping names (alpha, bravo, etc.) to avoid LIKE substring matches.
+		$names = array( 'alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel', 'india', 'juliet', 'kilo', 'lima' );
+		$ids   = array();
+		foreach ( $names as $i => $name ) {
+			$ids[ $i ] = $this->create_attachment( array( 'post_title' => "captest-{$name}" ) );
+		}
+
+		$search = implode( ', ', array_map( function( $name ) { return "captest-{$name}"; }, $names ) );
+
+		try {
+			$results = $this->search_attachments( $search, array( 'posts_per_page' => -1 ) );
+		} finally {
+			remove_filter( 'mse_is_media_modal_request', '__return_true' );
+		}
+
+		// First 10 terms should match.
+		for ( $i = 0; $i < 10; $i++ ) {
+			$this->assertContains( $ids[ $i ], $results, "Term '{$names[$i]}' (within cap) should match." );
+		}
+		// Terms 11-12 should be dropped.
+		for ( $i = 10; $i < 12; $i++ ) {
+			$this->assertNotContains( $ids[ $i ], $results, "Term '{$names[$i]}' (over cap) should not match." );
+		}
 	}
 }

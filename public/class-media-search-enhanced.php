@@ -28,7 +28,7 @@ class Media_Search_Enhanced {
 	 *
 	 * @var     string
 	 */
-	const VERSION = '0.9.2';
+	const VERSION = '1.0.0';
 
 	/**
 	 *
@@ -66,7 +66,8 @@ class Media_Search_Enhanced {
 		add_action( 'init', array( $this, 'load_plugin_textdomain' ) );
 
 		// Media Search filters
-		add_filter( 'posts_clauses', array( $this, 'posts_clauses' ), 20 );
+		add_filter( 'posts_search', array( $this, 'suppress_core_search' ), 20, 2 );
+		add_filter( 'posts_clauses', array( $this, 'posts_clauses' ), 20, 2 );
 
 		// Add a media search form shortcode
 		add_shortcode( 'mse-search-form', array( $this, 'search_form' ) );
@@ -127,130 +128,188 @@ class Media_Search_Enhanced {
 	}
 
 	/**
-	 * Set query clauses in the SQL statement
+	 * Check whether the given query is an attachment search handled by this plugin.
+	 *
+	 * @param WP_Query $query The WP_Query instance to check.
+	 * @return bool
+	 */
+	private static function is_mse_search( $query ) {
+		$vars = $query->query_vars;
+		if ( empty( $vars ) ) {
+			$vars = ( isset( $_REQUEST['query'] ) ) ? $_REQUEST['query'] : array();
+		}
+
+		return ! empty( $vars['s'] ) && is_string( $vars['s'] )
+			&& ( ( isset( $_REQUEST['action'] ) && 'query-attachments' == $_REQUEST['action'] )
+				|| ( isset( $vars['post_type'] ) && 'attachment' == $vars['post_type'] ) );
+	}
+
+	/**
+	 * Suppress WordPress core's search WHERE clause so this plugin can
+	 * replace it with expanded search conditions (meta, taxonomy, etc.)
+	 * without overwriting the entire WHERE.
+	 *
+	 * @param string   $search Search SQL fragment.
+	 * @param WP_Query $query  The WP_Query instance.
+	 * @return string
+	 */
+	public static function suppress_core_search( $search, $query ) {
+		if ( self::is_mse_search( $query ) ) {
+			return '';
+		}
+		return $search;
+	}
+
+	/**
+	 * Append expanded search conditions to the SQL WHERE clause.
+	 *
+	 * Instead of overwriting $pieces['where'], this preserves conditions
+	 * from WordPress core and other plugins (type, status, date, parent,
+	 * mime, author restrictions, etc.) and only appends the search logic.
+	 *
+	 * Core's default search clause is suppressed by suppress_core_search()
+	 * to prevent conflicts with our expanded conditions.
 	 *
 	 * @return array
 	 *
 	 * @since    0.6.0
 	 */
-	public static function posts_clauses( $pieces ) {
+	public static function posts_clauses( $pieces, $query ) {
 
-		global $wp_query, $wpdb;
+		global $wpdb;
 
-		$vars = $wp_query->query_vars;
+		if ( ! self::is_mse_search( $query ) ) {
+			return $pieces;
+		}
+
+		$vars = $query->query_vars;
 		if ( empty( $vars ) ) {
 			$vars = ( isset( $_REQUEST['query'] ) ) ? $_REQUEST['query'] : array();
 		}
 
-		// Rewrite the where clause
-		if ( ! empty( $vars['s'] ) && ( ( isset( $_REQUEST['action'] ) && 'query-attachments' == $_REQUEST['action'] ) || 'attachment' == $vars['post_type'] ) ) {
-			$status_clause = "$wpdb->posts.post_status = 'inherit'";
-			if ( current_user_can( 'read_private_posts' ) ) {
-				$status_clause .= " OR $wpdb->posts.post_status = 'private'";
-			} elseif ( is_user_logged_in() ) {
-				$status_clause .= $wpdb->prepare(
-					" OR ($wpdb->posts.post_status = 'private' AND $wpdb->posts.post_author = %d)",
+		// Expand post_status to include 'private' for authorized users.
+		// Core's WHERE already has the status condition from query_vars;
+		// we widen it rather than overwriting.
+		if ( current_user_can( 'read_private_posts' )
+			&& strpos( $pieces['where'], "post_status = 'private'" ) === false ) {
+			$pieces['where'] = str_replace(
+				"$wpdb->posts.post_status = 'inherit'",
+				"($wpdb->posts.post_status = 'inherit' OR $wpdb->posts.post_status = 'private')",
+				$pieces['where']
+			);
+		} elseif ( is_user_logged_in()
+			&& strpos( $pieces['where'], "post_status = 'private'" ) === false ) {
+			$pieces['where'] = str_replace(
+				"$wpdb->posts.post_status = 'inherit'",
+				$wpdb->prepare(
+					"($wpdb->posts.post_status = 'inherit' OR ($wpdb->posts.post_status = 'private' AND $wpdb->posts.post_author = %d))",
 					get_current_user_id()
-				);
-			}
-			$pieces['where'] = " AND $wpdb->posts.post_type = 'attachment' AND ($status_clause)";
-
-			if ( class_exists('WPML_Media') ) {
-				global $sitepress;
-				//get current language
-				$lang = $sitepress->get_current_language();
-				$pieces['where'] .= $wpdb->prepare( " AND t.element_type='post_attachment' AND t.language_code = %s", $lang );
-			}
-
-			if ( isset( $vars['post_parent'] ) ) {
-				$post_parent = absint( $vars['post_parent'] );
-				if ( $post_parent > 0 ) {
-					$pieces['where'] .= $wpdb->prepare( " AND $wpdb->posts.post_parent = %d", $post_parent );
-				} elseif ( 0 === $post_parent ) {
-					// Get unattached attachments
-					$pieces['where'] .= $wpdb->prepare( " AND $wpdb->posts.post_parent = %d", 0 );
-				}
-			}
-
-			if ( ! empty( $vars['post_mime_type'] ) ) {
-				$mime_types = is_array( $vars['post_mime_type'] ) ? $vars['post_mime_type'] : [ $vars['post_mime_type'] ];
-				$like_clauses = array();
-
-				foreach ( $mime_types as $mime_type ) {
-					$mime_type_like = '%' . $wpdb->esc_like( $mime_type ) . '%';
-					$like_clauses[] = $wpdb->prepare( "$wpdb->posts.post_mime_type LIKE %s", $mime_type_like );
-				}
-
-				$pieces['where'] .= " AND (" . implode( ' OR ', $like_clauses ) . ")";
-			}
-
-			if ( ! empty( $vars['m'] ) ) {
-				$year = substr( $vars['m'], 0, 4 );
-				$monthnum = substr( $vars['m'], 4 );
-				$pieces['where'] .= $wpdb->prepare( " AND YEAR($wpdb->posts.post_date) = %d AND MONTH($wpdb->posts.post_date) = %d", $year, $monthnum );
-			} else {
-				if ( ! empty( $vars['year'] ) && 'false' != $vars['year'] ) {
-					$pieces['where'] .= $wpdb->prepare( " AND YEAR($wpdb->posts.post_date) = %d", $vars['year'] );
-				}
-
-				if ( ! empty( $vars['monthnum'] ) && 'false' != $vars['monthnum'] ) {
-					$pieces['where'] .= $wpdb->prepare( " AND MONTH($wpdb->posts.post_date) = %d", $vars['monthnum'] );
-				}
-			}
-
-			// search for keyword "s"
-			$like = '%' . $wpdb->esc_like( $vars['s'] ) . '%';
-
-			// Use exact integer match for ID when search term is numeric; skip ID match otherwise.
-			$search_trimmed = trim( $vars['s'] );
-			$search_int     = absint( $search_trimmed );
-			if ( $search_int > 0 && ctype_digit( $search_trimmed ) ) {
-				$id_condition = sprintf( "($wpdb->posts.ID = %d)", $search_int );
-			} else {
-				$id_condition = '(1=0)';
-			}
-
-			$pieces['where'] .= $wpdb->prepare(
-				" AND ( $id_condition OR ($wpdb->posts.post_title LIKE %s) OR ($wpdb->posts.guid LIKE %s) OR ($wpdb->posts.post_content LIKE %s) OR ($wpdb->posts.post_excerpt LIKE %s)",
-				$like, $like, $like, $like
+				),
+				$pieces['where']
 			);
-
-			// Alt text — EXISTS subquery instead of LEFT JOIN
-			$pieces['where'] .= $wpdb->prepare(
-				" OR EXISTS (SELECT 1 FROM $wpdb->postmeta WHERE $wpdb->postmeta.post_id = $wpdb->posts.ID AND $wpdb->postmeta.meta_key = '_wp_attachment_image_alt' AND $wpdb->postmeta.meta_value LIKE %s)",
-				$like
-			);
-
-			// Filename — EXISTS subquery instead of LEFT JOIN
-			$pieces['where'] .= $wpdb->prepare(
-				" OR EXISTS (SELECT 1 FROM $wpdb->postmeta WHERE $wpdb->postmeta.post_id = $wpdb->posts.ID AND $wpdb->postmeta.meta_key = '_wp_attached_file' AND $wpdb->postmeta.meta_value LIKE %s)",
-				$like
-			);
-
-			// Taxonomy — EXISTS subquery instead of LEFT JOIN
-			$taxes = get_object_taxonomies( 'attachment' );
-			if ( ! empty( $taxes ) ) {
-				$tax_where = array();
-				foreach ( $taxes as $tax ) {
-					$tax = sanitize_key( $tax );
-					$tax_where[] = $wpdb->prepare( "tt.taxonomy = %s", $tax );
-				}
-				$tax_filter = '( ' . implode( ' OR ', $tax_where ) . ' )';
-
-				$pieces['where'] .= " OR EXISTS (SELECT 1 FROM $wpdb->term_relationships AS tr"
-					. " INNER JOIN $wpdb->term_taxonomy AS tt ON (tr.term_taxonomy_id = tt.term_taxonomy_id AND $tax_filter)"
-					. " INNER JOIN $wpdb->terms AS t ON (tt.term_id = t.term_id)"
-					. " WHERE tr.object_id = $wpdb->posts.ID AND ("
-					. $wpdb->prepare( "t.slug LIKE %s OR tt.description LIKE %s OR t.name LIKE %s", $like, $like, $like )
-					. "))";
-			}
-
-			$pieces['where'] .= " )";
-
-			$pieces['orderby'] = "$wpdb->posts.post_date DESC";
 		}
 
+		// WPML compatibility.
+		if ( class_exists( 'WPML_Media' ) ) {
+			global $sitepress;
+			$lang = $sitepress->get_current_language();
+			$pieces['where'] .= $wpdb->prepare( " AND t.element_type='post_attachment' AND t.language_code = %s", $lang );
+		}
+
+		// Multi-term (comma-separated) search is restricted to the admin media
+		// modal to prevent query amplification on public-facing search pages.
+		$is_media_modal = is_admin() && defined( 'DOING_AJAX' ) && DOING_AJAX
+			&& isset( $_REQUEST['action'] ) && 'query-attachments' === $_REQUEST['action'];
+		$is_media_modal = apply_filters( 'mse_is_media_modal_request', $is_media_modal );
+		$max_terms      = (int) apply_filters( 'mse_max_search_terms', 10 );
+		if ( $is_media_modal && strpos( $vars['s'], ',' ) !== false ) {
+			$terms = array_values( array_filter( array_map( 'trim', explode( ',', $vars['s'] ) ), 'strlen' ) );
+		} else {
+			$terms = array( $vars['s'] );
+		}
+		if ( empty( $terms ) ) {
+			$pieces['where'] .= " AND 1=0";
+			return $pieces;
+		}
+		$terms = array_slice( $terms, 0, max( 1, $max_terms ) );
+
+		// Build taxonomy filter once (shared across all terms).
+		$taxes      = get_object_taxonomies( 'attachment' );
+		$tax_filter = '';
+		if ( ! empty( $taxes ) ) {
+			$tax_where = array();
+			foreach ( $taxes as $tax ) {
+				$tax = sanitize_key( $tax );
+				$tax_where[] = $wpdb->prepare( "tt.taxonomy = %s", $tax );
+			}
+			$tax_filter = '( ' . implode( ' OR ', $tax_where ) . ' )';
+		}
+
+		// Generate search conditions for each term, then OR them together.
+		$term_groups = array();
+		foreach ( $terms as $term ) {
+			$term_groups[] = self::build_search_conditions( $term, $taxes, $tax_filter );
+		}
+
+		$pieces['where'] .= " AND ( " . implode( ' OR ', $term_groups ) . " )";
+
+		$pieces['orderby'] = "$wpdb->posts.post_date DESC";
+
 		return $pieces;
+	}
+
+	/**
+	 * Build the SQL search conditions for a single search term.
+	 *
+	 * @param string $term       The search term.
+	 * @param array  $taxes      Attachment taxonomies.
+	 * @param string $tax_filter Pre-built taxonomy filter clause.
+	 * @return string SQL fragment: ( id_cond OR title LIKE ... OR EXISTS ... )
+	 */
+	private static function build_search_conditions( $term, $taxes, $tax_filter ) {
+		global $wpdb;
+
+		$like = '%' . $wpdb->esc_like( $term ) . '%';
+
+		// Use exact integer match for ID when search term is numeric.
+		$search_trimmed = trim( $term );
+		$search_int     = absint( $search_trimmed );
+		if ( $search_int > 0 && ctype_digit( $search_trimmed ) ) {
+			$id_condition = sprintf( "($wpdb->posts.ID = %d)", $search_int );
+		} else {
+			$id_condition = '(1=0)';
+		}
+
+		$conditions = $wpdb->prepare(
+			"( $id_condition OR ($wpdb->posts.post_title LIKE %s) OR ($wpdb->posts.guid LIKE %s) OR ($wpdb->posts.post_content LIKE %s) OR ($wpdb->posts.post_excerpt LIKE %s)",
+			$like, $like, $like, $like
+		);
+
+		// Alt text
+		$conditions .= $wpdb->prepare(
+			" OR EXISTS (SELECT 1 FROM $wpdb->postmeta WHERE $wpdb->postmeta.post_id = $wpdb->posts.ID AND $wpdb->postmeta.meta_key = '_wp_attachment_image_alt' AND $wpdb->postmeta.meta_value LIKE %s)",
+			$like
+		);
+
+		// Filename
+		$conditions .= $wpdb->prepare(
+			" OR EXISTS (SELECT 1 FROM $wpdb->postmeta WHERE $wpdb->postmeta.post_id = $wpdb->posts.ID AND $wpdb->postmeta.meta_key = '_wp_attached_file' AND $wpdb->postmeta.meta_value LIKE %s)",
+			$like
+		);
+
+		// Taxonomy
+		if ( ! empty( $taxes ) && ! empty( $tax_filter ) ) {
+			$conditions .= " OR EXISTS (SELECT 1 FROM $wpdb->term_relationships AS tr"
+				. " INNER JOIN $wpdb->term_taxonomy AS tt ON (tr.term_taxonomy_id = tt.term_taxonomy_id AND $tax_filter)"
+				. " INNER JOIN $wpdb->terms AS t ON (tt.term_id = t.term_id)"
+				. " WHERE tr.object_id = $wpdb->posts.ID AND ("
+				. $wpdb->prepare( "t.slug LIKE %s OR tt.description LIKE %s OR t.name LIKE %s", $like, $like, $like )
+				. "))";
+		}
+
+		$conditions .= " )";
+
+		return $conditions;
 	}
 
 	/**

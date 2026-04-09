@@ -79,10 +79,11 @@ class QueryStructureTest extends WP_UnitTestCase {
 
 		$wp_query->query_vars = $original_vars;
 
-		// Find the main query SQL (the one with our search term).
-		$captured_sql = '';
+		// Find the main query SQL (match on the first comma-separated term if present).
+		$search_needle = trim( explode( ',', $search )[0] );
+		$captured_sql  = '';
 		foreach ( $wpdb->queries as $q ) {
-			if ( stripos( $q[0], $search ) !== false && stripos( $q[0], 'SELECT' ) !== false ) {
+			if ( stripos( $q[0], $search_needle ) !== false && stripos( $q[0], 'SELECT' ) !== false ) {
 				$captured_sql = $q[0];
 				break;
 			}
@@ -172,6 +173,27 @@ class QueryStructureTest extends WP_UnitTestCase {
 			$result['sql'],
 			'Non-numeric search should not use ID = either.'
 		);
+	}
+
+	/**
+	 * Assert multi-term (comma-separated) search generates OR groups.
+	 */
+	public function test_multi_term_search_generates_or_groups() {
+		add_filter( 'mse_is_media_modal_request', '__return_true' );
+
+		$result = $this->capture_query( 'alpha-term, beta-term' );
+
+		remove_filter( 'mse_is_media_modal_request', '__return_true' );
+
+		$this->assertNotEmpty( $result['sql'], 'Should have captured the search SQL.' );
+
+		// Both terms should appear in the SQL.
+		$this->assertStringContainsString( 'alpha-term', $result['sql'], 'SQL should contain first search term.' );
+		$this->assertStringContainsString( 'beta-term', $result['sql'], 'SQL should contain second search term.' );
+
+		// Should have multiple EXISTS groups (one set per term).
+		$exists_count = substr_count( $result['sql'], 'EXISTS' );
+		$this->assertGreaterThanOrEqual( 4, $exists_count, 'Multi-term search should have EXISTS subqueries for each term (at least 2 per term).' );
 	}
 
 	/**
