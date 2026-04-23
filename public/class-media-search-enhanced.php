@@ -163,9 +163,9 @@ class Media_Search_Enhanced {
 	/**
 	 * Append expanded search conditions to the SQL WHERE clause.
 	 *
-	 * Instead of overwriting $pieces['where'], this preserves conditions
-	 * from WordPress core and other plugins (type, status, date, parent,
-	 * mime, author restrictions, etc.) and only appends the search logic.
+	 * Instead of overwriting $pieces['where'], this preserves non-search
+	 * conditions from WordPress core and other plugins (type, status, date,
+	 * parent, mime, author restrictions, etc.) and only appends the search logic.
 	 *
 	 * Core's default search clause is suppressed by suppress_core_search()
 	 * to prevent conflicts with our expanded conditions.
@@ -232,8 +232,30 @@ class Media_Search_Enhanced {
 		}
 		$terms = array_slice( $terms, 0, max( 1, $max_terms ) );
 
+		// Large sites can narrow the query surface area without changing the default behavior.
+		$search_fields = array(
+			'id'          => true,
+			'title'       => true,
+			'guid'        => true,
+			'description' => true,
+			'caption'     => true,
+			'alt_text'    => true,
+			'filename'    => true,
+			'taxonomy'    => true,
+		);
+		// Callbacks can return either the full field map or only the keys they want to change.
+		$search_fields = array_intersect_key(
+			array_merge( $search_fields, (array) apply_filters( 'mse_search_fields', $search_fields, $query, $terms ) ),
+			$search_fields
+		);
+
+		if ( empty( array_filter( $search_fields ) ) ) {
+			$pieces['where'] .= " AND 1=0";
+			return $pieces;
+		}
+
 		// Build taxonomy filter once (shared across all terms).
-		$taxes      = get_object_taxonomies( 'attachment' );
+		$taxes      = $search_fields['taxonomy'] ? get_object_taxonomies( 'attachment' ) : array();
 		$tax_filter = '';
 		if ( ! empty( $taxes ) ) {
 			$tax_where = array();
@@ -247,7 +269,7 @@ class Media_Search_Enhanced {
 		// Generate search conditions for each term, then OR them together.
 		$term_groups = array();
 		foreach ( $terms as $term ) {
-			$term_groups[] = self::build_search_conditions( $term, $taxes, $tax_filter );
+			$term_groups[] = self::build_search_conditions( $term, $taxes, $tax_filter, $search_fields );
 		}
 
 		$pieces['where'] .= " AND ( " . implode( ' OR ', $term_groups ) . " )";
@@ -265,40 +287,56 @@ class Media_Search_Enhanced {
 	 * @param string $tax_filter Pre-built taxonomy filter clause.
 	 * @return string SQL fragment: ( id_cond OR title LIKE ... OR EXISTS ... )
 	 */
-	private static function build_search_conditions( $term, $taxes, $tax_filter ) {
+	private static function build_search_conditions( $term, $taxes, $tax_filter, $search_fields ) {
 		global $wpdb;
 
 		$like = '%' . $wpdb->esc_like( $term ) . '%';
+		$conditions = array();
 
 		// Use exact integer match for ID when search term is numeric.
-		$search_trimmed = trim( $term );
-		$search_int     = absint( $search_trimmed );
-		if ( $search_int > 0 && ctype_digit( $search_trimmed ) ) {
-			$id_condition = sprintf( "($wpdb->posts.ID = %d)", $search_int );
-		} else {
-			$id_condition = '(1=0)';
+		if ( $search_fields['id'] ) {
+			$search_trimmed = trim( $term );
+			$search_int     = absint( $search_trimmed );
+			if ( $search_int > 0 && ctype_digit( $search_trimmed ) ) {
+				$conditions[] = sprintf( "($wpdb->posts.ID = %d)", $search_int );
+			}
 		}
 
-		$conditions = $wpdb->prepare(
-			"( $id_condition OR ($wpdb->posts.post_title LIKE %s) OR ($wpdb->posts.guid LIKE %s) OR ($wpdb->posts.post_content LIKE %s) OR ($wpdb->posts.post_excerpt LIKE %s)",
-			$like, $like, $like, $like
-		);
+		if ( $search_fields['title'] ) {
+			$conditions[] = $wpdb->prepare( "($wpdb->posts.post_title LIKE %s)", $like );
+		}
+
+		if ( $search_fields['guid'] ) {
+			$conditions[] = $wpdb->prepare( "($wpdb->posts.guid LIKE %s)", $like );
+		}
+
+		if ( $search_fields['description'] ) {
+			$conditions[] = $wpdb->prepare( "($wpdb->posts.post_content LIKE %s)", $like );
+		}
+
+		if ( $search_fields['caption'] ) {
+			$conditions[] = $wpdb->prepare( "($wpdb->posts.post_excerpt LIKE %s)", $like );
+		}
 
 		// Alt text
-		$conditions .= $wpdb->prepare(
-			" OR EXISTS (SELECT 1 FROM $wpdb->postmeta WHERE $wpdb->postmeta.post_id = $wpdb->posts.ID AND $wpdb->postmeta.meta_key = '_wp_attachment_image_alt' AND $wpdb->postmeta.meta_value LIKE %s)",
-			$like
-		);
+		if ( $search_fields['alt_text'] ) {
+			$conditions[] = $wpdb->prepare(
+				"EXISTS (SELECT 1 FROM $wpdb->postmeta WHERE $wpdb->postmeta.post_id = $wpdb->posts.ID AND $wpdb->postmeta.meta_key = '_wp_attachment_image_alt' AND $wpdb->postmeta.meta_value LIKE %s)",
+				$like
+			);
+		}
 
 		// Filename
-		$conditions .= $wpdb->prepare(
-			" OR EXISTS (SELECT 1 FROM $wpdb->postmeta WHERE $wpdb->postmeta.post_id = $wpdb->posts.ID AND $wpdb->postmeta.meta_key = '_wp_attached_file' AND $wpdb->postmeta.meta_value LIKE %s)",
-			$like
-		);
+		if ( $search_fields['filename'] ) {
+			$conditions[] = $wpdb->prepare(
+				"EXISTS (SELECT 1 FROM $wpdb->postmeta WHERE $wpdb->postmeta.post_id = $wpdb->posts.ID AND $wpdb->postmeta.meta_key = '_wp_attached_file' AND $wpdb->postmeta.meta_value LIKE %s)",
+				$like
+			);
+		}
 
 		// Taxonomy
-		if ( ! empty( $taxes ) && ! empty( $tax_filter ) ) {
-			$conditions .= " OR EXISTS (SELECT 1 FROM $wpdb->term_relationships AS tr"
+		if ( $search_fields['taxonomy'] && ! empty( $taxes ) && ! empty( $tax_filter ) ) {
+			$conditions[] = "EXISTS (SELECT 1 FROM $wpdb->term_relationships AS tr"
 				. " INNER JOIN $wpdb->term_taxonomy AS tt ON (tr.term_taxonomy_id = tt.term_taxonomy_id AND $tax_filter)"
 				. " INNER JOIN $wpdb->terms AS t ON (tt.term_id = t.term_id)"
 				. " WHERE tr.object_id = $wpdb->posts.ID AND ("
@@ -306,9 +344,11 @@ class Media_Search_Enhanced {
 				. "))";
 		}
 
-		$conditions .= " )";
+		if ( empty( $conditions ) ) {
+			return '(1=0)';
+		}
 
-		return $conditions;
+		return '( ' . implode( ' OR ', $conditions ) . ' )';
 	}
 
 	/**

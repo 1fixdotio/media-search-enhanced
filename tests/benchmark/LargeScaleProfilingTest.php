@@ -15,6 +15,7 @@ class LargeScaleProfilingTest extends WP_UnitTestCase {
 	 * @var int[] Attachment IDs created during seeding.
 	 */
 	private static $attachment_ids = array();
+	private static $scenario_terms = array();
 
 	/**
 	 * @var int Number of attachments seeded.
@@ -57,20 +58,57 @@ class LargeScaleProfilingTest extends WP_UnitTestCase {
 				wp_set_object_terms( $id, $term_name, 'media_tag' );
 			}
 		}
+
+		self::$scenario_terms = array(
+			'title'    => 'profiling-special-title-only',
+			'alt'      => 'profiling-special-alt-only',
+			'filename' => 'profiling-special-file-only',
+			'taxonomy' => 'profiling-special-taxonomy-only',
+			'none'     => 'profiling-special-no-match',
+		);
+
+		$title_id = $factory->attachment->create( array(
+			'post_title'     => self::$scenario_terms['title'],
+			'post_status'    => 'inherit',
+			'post_mime_type' => 'image/jpeg',
+		) );
+		$alt_id = $factory->attachment->create( array(
+			'post_title'     => 'profiling-special-alt-holder',
+			'post_status'    => 'inherit',
+			'post_mime_type' => 'image/jpeg',
+		) );
+		$file_id = $factory->attachment->create( array(
+			'post_title'     => 'profiling-special-file-holder',
+			'post_status'    => 'inherit',
+			'post_mime_type' => 'image/jpeg',
+		) );
+		$taxonomy_id = $factory->attachment->create( array(
+			'post_title'     => 'profiling-special-taxonomy-holder',
+			'post_status'    => 'inherit',
+			'post_mime_type' => 'image/jpeg',
+		) );
+
+		update_post_meta( $alt_id, '_wp_attachment_image_alt', self::$scenario_terms['alt'] );
+		update_post_meta( $file_id, '_wp_attached_file', '2024/01/' . self::$scenario_terms['filename'] . '.jpg' );
+		wp_insert_term( self::$scenario_terms['taxonomy'], 'media_tag' );
+		wp_set_object_terms( $taxonomy_id, self::$scenario_terms['taxonomy'], 'media_tag' );
+
+		self::$attachment_ids[] = $title_id;
+		self::$attachment_ids[] = $alt_id;
+		self::$attachment_ids[] = $file_id;
+		self::$attachment_ids[] = $taxonomy_id;
 	}
 
 	/**
-	 * Profile a search query and log detailed results.
+	 * Profile a search query and capture the generated SQL.
+	 *
+	 * @param string $search Search term.
+	 * @return array { sql: string, time: float, results_count: int }
 	 */
-	public function test_large_scale_query_profiling() {
+	private function profile_query( $search ) {
 		global $wpdb, $wp_query;
 
 		$wpdb->queries = array();
-		if ( ! defined( 'SAVEQUERIES' ) ) {
-			define( 'SAVEQUERIES', true );
-		}
-
-		$search = 'profiling-attachment';
 
 		$args = array(
 			'post_type'   => 'attachment',
@@ -79,45 +117,107 @@ class LargeScaleProfilingTest extends WP_UnitTestCase {
 			'fields'      => 'ids',
 		);
 
-		// The plugin reads from global $wp_query->query_vars.
 		$original_vars        = $wp_query->query_vars;
 		$wp_query->query_vars = $args;
 
 		$start = microtime( true );
-
 		$query = new WP_Query( $args );
-
 		$elapsed = microtime( true ) - $start;
 
 		$wp_query->query_vars = $original_vars;
 
-		// Find the main query SQL.
-		$captured_sql = '';
+		$search_needle = trim( explode( ',', $search )[0] );
+		$captured_sql  = '';
 		foreach ( $wpdb->queries as $q ) {
-			if ( stripos( $q[0], $search ) !== false && stripos( $q[0], 'SELECT' ) !== false ) {
+			if ( stripos( $q[0], $search_needle ) !== false && stripos( $q[0], 'SELECT' ) !== false ) {
 				$captured_sql = $q[0];
 				break;
 			}
 		}
 
-		$this->assertNotEmpty( $captured_sql, 'Should have captured the search SQL.' );
+		return array(
+			'sql'           => $captured_sql,
+			'time'          => $elapsed,
+			'results_count' => $query->found_posts,
+		);
+	}
 
-		// Run EXPLAIN.
-		$explain = $wpdb->get_results( 'EXPLAIN ' . $captured_sql );
+	/**
+	 * Profile a search query and log detailed results.
+	 */
+	public function test_large_scale_query_profiling() {
+		global $wpdb;
 
-		// Detailed log output.
+		if ( ! defined( 'SAVEQUERIES' ) ) {
+			define( 'SAVEQUERIES', true );
+		}
+
+		$scenarios = array(
+			array(
+				'label'  => 'broad-title',
+				'search' => 'profiling-attachment',
+			),
+			array(
+				'label'  => 'title-only',
+				'search' => self::$scenario_terms['title'],
+			),
+			array(
+				'label'  => 'alt-only',
+				'search' => self::$scenario_terms['alt'],
+			),
+			array(
+				'label'  => 'filename-only',
+				'search' => self::$scenario_terms['filename'],
+			),
+			array(
+				'label'  => 'taxonomy-only',
+				'search' => self::$scenario_terms['taxonomy'],
+			),
+			array(
+				'label'      => 'multi-term',
+				'search'     => self::$scenario_terms['title'] . ', ' . self::$scenario_terms['alt'],
+				'multi_term' => true,
+			),
+			array(
+				'label'  => 'zero-match',
+				'search' => self::$scenario_terms['none'],
+			),
+		);
+
 		$log  = sprintf( "\n=== Large-Scale Profiling (%s attachments) ===\n", number_format( self::$count ) );
-		$log .= sprintf( "Results found: %d\n", $query->found_posts );
-		$log .= sprintf( "Query time: %.4f seconds\n", $elapsed );
-		$log .= "SQL:\n" . $captured_sql . "\n\n";
-		$log .= "EXPLAIN output:\n";
 
-		if ( ! empty( $explain ) ) {
-			$headers = array_keys( get_object_vars( $explain[0] ) );
-			$log    .= implode( "\t", $headers ) . "\n";
-			foreach ( $explain as $row ) {
-				$log .= implode( "\t", array_values( get_object_vars( $row ) ) ) . "\n";
+		foreach ( $scenarios as $scenario ) {
+			if ( ! empty( $scenario['multi_term'] ) ) {
+				add_filter( 'mse_allow_multi_term_search', '__return_true' );
 			}
+
+			try {
+				$result = $this->profile_query( $scenario['search'] );
+			} finally {
+				if ( ! empty( $scenario['multi_term'] ) ) {
+					remove_filter( 'mse_allow_multi_term_search', '__return_true' );
+				}
+			}
+
+			$this->assertNotEmpty( $result['sql'], sprintf( 'Should have captured the search SQL for %s.', $scenario['label'] ) );
+
+			$explain = $wpdb->get_results( 'EXPLAIN ' . $result['sql'] );
+
+			$log .= sprintf( "-- %s (%s) --\n", $scenario['label'], $scenario['search'] );
+			$log .= sprintf( "Results found: %d\n", $result['results_count'] );
+			$log .= sprintf( "Query time: %.4f seconds\n", $result['time'] );
+			$log .= "SQL:\n" . $result['sql'] . "\n";
+			$log .= "EXPLAIN output:\n";
+
+			if ( ! empty( $explain ) ) {
+				$headers = array_keys( get_object_vars( $explain[0] ) );
+				$log    .= implode( "\t", $headers ) . "\n";
+				foreach ( $explain as $row ) {
+					$log .= implode( "\t", array_values( get_object_vars( $row ) ) ) . "\n";
+				}
+			}
+
+			$log .= "\n";
 		}
 
 		$log .= "================================================\n";

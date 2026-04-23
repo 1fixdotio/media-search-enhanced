@@ -36,6 +36,20 @@ bash bin/install-wp-tests.sh <db-name> <db-user> <db-pass> [db-host] [wp-version
 
 CI runs `composer test` on every push/PR across PHP 7.4-8.3 with MySQL 8.0.
 
+## Large-library tuning
+
+Large media libraries can trim the search surface area without changing the default plugin behavior. Use the `mse_search_fields` filter to disable the most expensive clauses you do not need, such as `guid` or `taxonomy`.
+
+```php
+add_filter( 'mse_search_fields', function( $fields, $query, $terms ) {
+	$fields['guid'] = false;
+	$fields['taxonomy'] = false;
+	return $fields;
+}, 10, 3 );
+```
+
+Supported keys are `id`, `title`, `guid`, `description`, `caption`, `alt_text`, `filename`, and `taxonomy`. Unspecified keys keep their defaults. If you disable every field, the query returns no results.
+
 ## Validating SQL performance changes
 
 When working on query changes (e.g., [#10](https://github.com/1fixdotio/media-search-enhanced/issues/10)), use these three layers to validate correctness and performance.

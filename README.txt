@@ -61,6 +61,21 @@ Please add the following code to the `functions.php` in your theme:
 	}
 	add_filter( 'mse_get_attachment_url', 'my_get_attachment_url', 10, 2 );
 
+= How do I tune the plugin for a very large media library? =
+
+Use the `mse_search_fields` filter to disable expensive search clauses you do not need, such as `guid` or `taxonomy`.
+
+	add_filter( 'mse_search_fields', 'my_mse_search_fields', 10, 3 );
+	function my_mse_search_fields( $fields, $query, $terms ) {
+		$fields['guid'] = false;
+		$fields['taxonomy'] = false;
+		return $fields;
+	}
+
+Supported keys are `id`, `title`, `guid`, `description`, `caption`, `alt_text`, `filename`, and `taxonomy`.
+
+Return strict booleans for the keys you change. Unspecified keys keep their default values. If you disable every search field, the query will return no results.
+
 == Screenshots ==
 
 1. Demo search on the Media Library screen.
