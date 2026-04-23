@@ -43,7 +43,7 @@ done
 
 # 1. raw.githubusercontent.com/<owner>/<repo>/<any-ref>/blueprint/...
 #    → swap <any-ref> to $REF. Affects both playground.blueprint.json and seed-media.php.
-URL_PATTERN='s|(raw\.githubusercontent\.com/[^/]+/[^/]+/)[^/]+(/blueprint)|\1'"${REF}"'\2|g'
+URL_PATTERN='s|(raw\.githubusercontent\.com/[^/]+/[^/]+/).+(/blueprint)|\1'"${REF}"'\2|g'
 sed -i.bak -E "$URL_PATTERN" "$BLUEPRINT" "$SEED_PHP"
 
 # 2. "ref": "<any>" inside the installPlugin git:directory resource in the Blueprint.

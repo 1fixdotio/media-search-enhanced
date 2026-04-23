@@ -64,7 +64,7 @@ foreach ( $seed as $item ) {
 		$dest
 	);
 
-	if ( is_wp_error( $attachment_id ) ) {
+	if ( ! $attachment_id || is_wp_error( $attachment_id ) ) {
 		continue;
 	}
 
