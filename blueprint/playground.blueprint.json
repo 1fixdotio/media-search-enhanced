@@ -13,7 +13,7 @@
       "pluginData": {
         "resource": "git:directory",
         "url": "https://github.com/1fixdotio/media-search-enhanced.git",
-        "ref": "add-playground-blueprint-demo"
+        "ref": "master"
       },
       "options": { "activate": true }
     },
@@ -22,7 +22,7 @@
       "path": "/wordpress/wp-content/mu-plugins/mse-demo-notice.php",
       "data": {
         "resource": "url",
-        "url": "https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/add-playground-blueprint-demo/blueprint/seed/mu-demo-notice.php"
+        "url": "https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/master/blueprint/seed/mu-demo-notice.php"
       }
     },
     {
@@ -30,7 +30,7 @@
       "path": "/tmp/mse-seed.php",
       "data": {
         "resource": "url",
-        "url": "https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/add-playground-blueprint-demo/blueprint/seed/seed-media.php"
+        "url": "https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/master/blueprint/seed/seed-media.php"
       }
     },
     {

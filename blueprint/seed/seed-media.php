@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 require_once ABSPATH . 'wp-admin/includes/image.php';
 
-$base_url = 'https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/add-playground-blueprint-demo/blueprint/seed/images/';
+$base_url = 'https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/master/blueprint/seed/images/';
 
 $upload     = wp_upload_dir();
 $target_dir = $upload['path'];
