@@ -31,6 +31,11 @@ fi
 REF="$1"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+# Escape chars that have special meaning in sed replacement strings (& / \).
+# Without this, a ref containing & would expand to the full match; a ref
+# containing \ would be interpreted as a backreference.
+SAFE_REF=$(printf '%s' "$REF" | sed 's/[&/\\]/\\&/g')
+
 BLUEPRINT="${REPO_ROOT}/blueprint/playground.blueprint.json"
 SEED_PHP="${REPO_ROOT}/blueprint/seed/seed-media.php"
 
@@ -43,12 +48,12 @@ done
 
 # 1. raw.githubusercontent.com/<owner>/<repo>/<any-ref>/blueprint/...
 #    → swap <any-ref> to $REF. Affects both playground.blueprint.json and seed-media.php.
-URL_PATTERN='s|(raw\.githubusercontent\.com/[^/]+/[^/]+/).+(/blueprint)|\1'"${REF}"'\2|g'
+URL_PATTERN='s|(raw\.githubusercontent\.com/[^/]+/[^/]+/).+(/blueprint)|\1'"${SAFE_REF}"'\2|g'
 sed -i.bak -E "$URL_PATTERN" "$BLUEPRINT" "$SEED_PHP"
 
 # 2. "ref": "<any>" inside the installPlugin git:directory resource in the Blueprint.
 #    This is what tells Playground which branch to clone the plugin source from.
-REF_PATTERN='s|("ref"[[:space:]]*:[[:space:]]*")[^"]*(")|\1'"${REF}"'\2|g'
+REF_PATTERN='s|("ref"[[:space:]]*:[[:space:]]*")[^"]*(")|\1'"${SAFE_REF}"'\2|g'
 sed -i.bak -E "$REF_PATTERN" "$BLUEPRINT"
 
 rm -f "${BLUEPRINT}.bak" "${SEED_PHP}.bak"

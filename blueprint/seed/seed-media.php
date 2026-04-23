@@ -14,6 +14,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 require_once ABSPATH . 'wp-admin/includes/image.php';
 
+// Idempotency guard: if Playground persists state (OPFS, etc.) and the Blueprint
+// re-runs, skip re-seeding rather than duplicating attachments.
+if ( get_option( 'mse_demo_seeded' ) ) {
+	return;
+}
+
 $base_url = 'https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/master/blueprint/seed/images/';
 
 $upload     = wp_upload_dir();
@@ -43,11 +49,14 @@ $seed = array(
 	array( 'file' => 'photo-08.jpg',                 'title' => 'ID demo file' ),
 );
 
+$created = 0;
+
 foreach ( $seed as $item ) {
 	$dest = trailingslashit( $target_dir ) . $item['file'];
 
 	$response = wp_remote_get( $base_url . $item['file'], array( 'timeout' => 30 ) );
 	if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
+		error_log( "MSE demo seed: download failed for {$item['file']}" );
 		continue;
 	}
 	file_put_contents( $dest, wp_remote_retrieve_body( $response ) );
@@ -65,6 +74,7 @@ foreach ( $seed as $item ) {
 	);
 
 	if ( ! $attachment_id || is_wp_error( $attachment_id ) ) {
+		error_log( "MSE demo seed: wp_insert_attachment failed for {$item['file']}" );
 		continue;
 	}
 
@@ -73,4 +83,8 @@ foreach ( $seed as $item ) {
 	}
 
 	wp_update_attachment_metadata( $attachment_id, wp_generate_attachment_metadata( $attachment_id, $dest ) );
+	$created++;
 }
+
+error_log( 'MSE demo seed: created ' . $created . ' of ' . count( $seed ) . ' attachments' );
+update_option( 'mse_demo_seeded', 1 );
