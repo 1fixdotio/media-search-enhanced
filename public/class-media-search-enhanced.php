@@ -216,13 +216,12 @@ class Media_Search_Enhanced {
 			$pieces['where'] .= $wpdb->prepare( " AND t.element_type='post_attachment' AND t.language_code = %s", $lang );
 		}
 
-		// Multi-term (comma-separated) search is restricted to the admin media
-		// modal to prevent query amplification on public-facing search pages.
-		$is_media_modal = is_admin() && defined( 'DOING_AJAX' ) && DOING_AJAX
-			&& isset( $_REQUEST['action'] ) && 'query-attachments' === $_REQUEST['action'];
-		$is_media_modal = apply_filters( 'mse_is_media_modal_request', $is_media_modal );
-		$max_terms      = (int) apply_filters( 'mse_max_search_terms', 10 );
-		if ( $is_media_modal && strpos( $vars['s'], ',' ) !== false ) {
+		// Multi-term (comma-separated) search is limited to wp-admin; admin users are
+		// authenticated, so the frontend query-amplification concern does not apply.
+		$allow_multi_term = is_admin();
+		$allow_multi_term = apply_filters( 'mse_allow_multi_term_search', $allow_multi_term );
+		$max_terms        = (int) apply_filters( 'mse_max_search_terms', 10 );
+		if ( $allow_multi_term && strpos( $vars['s'], ',' ) !== false ) {
 			$terms = array_values( array_filter( array_map( 'trim', explode( ',', $vars['s'] ) ), 'strlen' ) );
 		} else {
 			$terms = array( $vars['s'] );

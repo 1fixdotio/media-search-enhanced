@@ -20,7 +20,7 @@ This plugin is made for:
 * Search through all fields in Media Library, including: ID, title, caption, alternative text and description.
 * Search Taxonomies for Media, include the name, slug and description fields.
 * Search media file name.
-* **Multi-term search** — In the admin Media Library modal, use commas to search for multiple items at once (e.g. `image-a.jpg, photo-2.jpg`). Matches attachments containing **any** of the terms. Limited to 10 terms per search. This feature is only available in the admin media modal; frontend searches treat commas as literal characters.
+* **Multi-term search** — Anywhere in the WordPress admin (the Media Library list view at `upload.php`, the "Add Media" modal, and other admin screens), use commas to search for multiple items at once (e.g. `image-a.jpg, photo-2.jpg`). Matches attachments containing **any** of the terms. Limited to 10 terms per search. Frontend searches still treat commas as literal characters, as a query-amplification guard for public pages.
 * Use shortcode `[mse-search-form]` to insert a media search form in posts and template files. It will search for media by all fields mentioned above.
 
 == Installation ==
@@ -69,13 +69,13 @@ Please add the following code to the `functions.php` in your theme:
 == Changelog ==
 
 = 1.0.0 =
-* New: Multi-term search — use commas to search for multiple items at once in the admin media modal (e.g. `sunset.jpg, logo.png`). Limited to 10 terms. Only available in the admin media modal; frontend searches treat commas as literal characters.
+* New: Multi-term search — use commas to search for multiple items at once anywhere in wp-admin, including the Media Library list view and the "Add Media" modal (e.g. `sunset.jpg, logo.png`). Limited to 10 terms. Frontend searches still treat commas as literal characters.
 * Performance: Replaced LEFT JOINs + DISTINCT with EXISTS subqueries, eliminating temporary tables and improving search speed up to 10x on large media libraries.
 * Performance: Numeric searches (e.g. searching by attachment ID) now use exact integer matching instead of string comparison, enabling primary key index usage.
 * Compatibility: The plugin no longer overwrites the entire WHERE clause. Conditions from WordPress core and other plugins are now preserved.
 * Security: Fixed reflected XSS in the search form placeholder.
 * Security: Private attachments are now only visible to users with appropriate permissions (editors/admins see all; authors see only their own).
-* Developer: Added `mse_max_search_terms` filter to customize the multi-term cap (default 10). Added `mse_is_media_modal_request` filter to customize where multi-term search is allowed.
+* Developer: Added `mse_max_search_terms` filter to customize the multi-term cap (default 10). Added `mse_allow_multi_term_search` filter to customize where multi-term search is allowed; defaults to `is_admin()`.
 
 = 0.9.2 =
 * Security enhancements.
