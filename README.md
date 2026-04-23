@@ -4,7 +4,7 @@ A WordPress plugin that extends the Media Library search to cover all fields: ID
 
 ## Try it in your browser
 
-[**Launch the demo in WordPress Playground →**](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/master/blueprint/demo.blueprint.json)
+[**Launch the demo in WordPress Playground →**](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/master/blueprint/playground.blueprint.json)
 
 Boots WordPress in your browser with the plugin pre-installed and a seeded Media Library. The landing page searches `mountain` across 8 attachments — MSE returns 6 hits (matches in filename and alt text included), core WP's search would only find 3. See [`blueprint/README.md`](blueprint/README.md) for details.
 

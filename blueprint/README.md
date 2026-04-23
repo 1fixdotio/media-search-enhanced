@@ -5,7 +5,7 @@ A one-click, browser-only demo of Media Search Enhanced powered by [WordPress Pl
 ## Try it
 
 <!-- markdownlint-disable-next-line MD034 -->
-https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/master/blueprint/demo.blueprint.json
+https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/master/blueprint/playground.blueprint.json
 
 Clicking the link boots WordPress in your browser with the plugin pre-installed and a seeded Media Library.
 
@@ -26,7 +26,7 @@ Core WP returns 3 hits. MSE returns 6. The three extra hits — filename-only, a
 
 ## Files
 
-- `demo.blueprint.json` — the Blueprint; fetch URL above points at this.
+- `playground.blueprint.json` — the Blueprint; fetch URL above points at this.
 - `seed/seed-media.php` — runs inside Playground's PHP. Downloads the placeholder images and creates 8 attachments with crafted metadata.
 - `seed/mu-demo-notice.php` — mu-plugin that prints the explanatory admin notice on `upload.php`. Only loaded inside the demo.
 - `seed/images/*.jpg` — 8 placeholder JPEGs (tiny 1x1 grayscale, ~330 bytes each). **Intended to be replaced** with real CC0 mountain photos before the 1.0.0 launch.
@@ -63,7 +63,7 @@ Because the seed script and mu-plugin are fetched from the repo's raw URLs, the 
 
 ## Testing on a branch
 
-`demo.blueprint.json` and `seed-media.php` hardcode `master` in their raw URLs, so you can't test changes by pushing to a feature branch alone — Playground would fetch the old `master` copies. Use `retarget.sh` to swap the refs:
+`playground.blueprint.json` and `seed-media.php` hardcode `master` in their raw URLs, so you can't test changes by pushing to a feature branch alone — Playground would fetch the old `master` copies. Use `retarget.sh` to swap the refs:
 
 ```bash
 git checkout -b my-demo-change

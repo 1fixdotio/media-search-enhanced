@@ -3,7 +3,7 @@
 # Rewrites the GitHub ref used by the Blueprint demo files so the Blueprint
 # can be tested from a feature branch before it's merged to master.
 #
-# Both demo.blueprint.json and seed-media.php hardcode
+# Both playground.blueprint.json and seed-media.php hardcode
 #   raw.githubusercontent.com/1fixdotio/media-search-enhanced/<ref>/blueprint/...
 # URLs. This script swaps <ref> to any git ref (branch name, tag, commit).
 #
@@ -31,7 +31,7 @@ fi
 REF="$1"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-BLUEPRINT="${REPO_ROOT}/blueprint/demo.blueprint.json"
+BLUEPRINT="${REPO_ROOT}/blueprint/playground.blueprint.json"
 SEED_PHP="${REPO_ROOT}/blueprint/seed/seed-media.php"
 
 for f in "$BLUEPRINT" "$SEED_PHP"; do
@@ -42,7 +42,7 @@ for f in "$BLUEPRINT" "$SEED_PHP"; do
 done
 
 # 1. raw.githubusercontent.com/<owner>/<repo>/<any-ref>/blueprint/...
-#    → swap <any-ref> to $REF. Affects both demo.blueprint.json and seed-media.php.
+#    → swap <any-ref> to $REF. Affects both playground.blueprint.json and seed-media.php.
 URL_PATTERN='s|(raw\.githubusercontent\.com/[^/]+/[^/]+/)[^/]+(/blueprint)|\1'"${REF}"'\2|g'
 sed -i.bak -E "$URL_PATTERN" "$BLUEPRINT" "$SEED_PHP"
 
@@ -56,6 +56,6 @@ rm -f "${BLUEPRINT}.bak" "${SEED_PHP}.bak"
 echo "Retargeted Blueprint files to ref: ${REF}"
 echo
 echo "Playground test URL:"
-echo "  https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/${REF}/blueprint/demo.blueprint.json"
+echo "  https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/${REF}/blueprint/playground.blueprint.json"
 echo
 echo "Remember to run \`$0 master\` before merging to master."
