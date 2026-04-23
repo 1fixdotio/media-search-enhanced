@@ -29,34 +29,17 @@ Core WP returns 3 hits. MSE returns 6. The three extra hits — filename-only, a
 - `playground.blueprint.json` — the Blueprint; fetch URL above points at this.
 - `seed/seed-media.php` — runs inside Playground's PHP. Downloads the placeholder images and creates 8 attachments with crafted metadata.
 - `seed/mu-demo-notice.php` — mu-plugin that prints the explanatory admin notice on `upload.php`. Only loaded inside the demo.
-- `seed/images/*.jpg` — 8 placeholder JPEGs (tiny 1x1 grayscale, ~330 bytes each). **Intended to be replaced** with real CC0 mountain photos before the 1.0.0 launch.
-
-## Swapping in real photos
-
-Drop real CC0 photos (Wikimedia Commons, Pixabay, etc.) into `seed/images/` using the exact same filenames:
-
-```
-photo-01.jpg
-mountain-trail-alps.jpg
-photo-03.jpg
-photo-04.jpg
-photo-05.jpg
-photo-06.jpg
-mountain-peak-dolomites.jpg
-photo-08.jpg
-```
-
-Resize each to roughly 800x600 to keep the Blueprint lightweight. No other file changes are needed — filenames are the only coupling between the images and the seed script.
+- `seed/images/*.jpg` — 8 CC0 photos (7 mountain landscapes + 1 forest scene) sourced via the Openverse API, resized to fit within 800px.
 
 ## How it works
 
 Boot sequence when someone opens the Playground link:
 
 1. Playground boots PHP + WordPress in the browser (WASM).
-2. `installPlugin` clones `master` from GitHub and activates the plugin. (Swap `ref` to a release tag to pin.)
+2. `installPlugin` downloads the pinned plugin zip from the GitHub release asset and activates the plugin.
 3. `writeFile` drops `mu-demo-notice.php` into `wp-content/mu-plugins/`.
 4. `writeFile` drops `seed-media.php` into `/tmp/`.
-5. `runPHP` loads WordPress and runs the seed script — fetches the 8 placeholder JPEGs from `raw.githubusercontent.com` and creates attachment posts with the crafted metadata.
+5. `runPHP` loads WordPress and runs the seed script — fetches the 8 CC0 photos from `raw.githubusercontent.com` and creates attachment posts with the crafted metadata.
 6. Browser opens on `/wp-admin/upload.php?mode=list&s=mountain`; the mu-plugin notice explains the demo.
 
 Because the seed script and mu-plugin are fetched from the repo's raw URLs, the Blueprint only works after the files are on `master`. Local edits to these files don't take effect until pushed.
@@ -79,13 +62,15 @@ git commit -am "test: retarget Blueprint back to master" && git push
 
 The script rewrites the `raw.githubusercontent.com/.../<ref>/blueprint/...` URLs in both files. Don't forget the swap-back — if a PR lands on `master` still pointing at a branch name, the live demo will break.
 
-## After cutting v1.0.0
+## Bumping the pinned release
 
-Once the `v1.0.0` release is published, the `.github/workflows/deploy.yml` workflow attaches a clean plugin zip (built by `10up/action-wordpress-plugin-deploy` honoring `.distignore`) to the GitHub release. Switch the Blueprint's `pluginData` from `git:directory` to a `url` resource pointing at that zip — cleaner install (no `tests/`, `composer.json`, etc.) and the demo pins to the release instead of tracking `master`:
+`pluginData` points at the release zip built by `.github/workflows/deploy.yml` (via `10up/action-wordpress-plugin-deploy`). When you publish a new release (e.g. `1.1.0`), update the URL in `playground.blueprint.json`:
 
 ```json
 "pluginData": {
   "resource": "url",
-  "url": "https://github.com/1fixdotio/media-search-enhanced/releases/download/v1.0.0/media-search-enhanced.zip"
+  "url": "https://github.com/1fixdotio/media-search-enhanced/releases/download/1.1.0/media-search-enhanced.zip"
 }
 ```
+
+Only the version segment changes. The zip is always named `media-search-enhanced.zip` and is attached to the release automatically by the deploy workflow.
