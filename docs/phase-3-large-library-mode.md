@@ -23,13 +23,13 @@ Two structural problems survive both phases:
 
 Phase 3 is the right tool when **all** of the following hold:
 
-- Library has roughly **50k+ attachments** (ballpark — benchmark before committing). Below that, the write amplification and rebuild cost are not worth it.
+- Library has roughly **100k+ attachments** (ballpark — benchmark before committing). Below that, the write amplification and rebuild cost are unlikely to beat a well-indexed Phase 2 install.
 - Search latency on `attachment` post type is a user-visible problem — the media modal takes seconds to populate, or `upload.php` filters freeze the admin.
 - The site actively wants taxonomy / alt / filename matches (can't just disable them via Phase 1).
 - The site runs MySQL **5.7+** or MariaDB **10.0.5+** (FULLTEXT on InnoDB). See section 9.
 - The operator is comfortable with an opt-in plugin table that needs a one-time rebuild.
 
-Sites that do **not** fit this profile should stay on Phase 1 + 2. The honest framing for the README is: "If `composer test:profile -- 100000` shows acceptable latency with Phase 2 indexes, you do not need Phase 3."
+Sites that do **not** fit this profile should stay on Phase 1 + 2. The honest framing for the README is: "If `composer test:profile -- 100000` shows acceptable latency on your hardware with Phase 2 indexes applied, you do not need Phase 3."
 
 ---
 
@@ -346,7 +346,7 @@ One optional follow-up:
 
 These must be resolved before the first Phase 3 PR lands.
 
-- **Multisite.** Do we ship one table per blog (via `$wpdb->prefix`, which is blog-scoped) or one global table with a `blog_id` column? The schema above includes `blog_id` defensively, but per-blog tables are more idiomatic with `$wpdb->prefix`. **Decision needed from maintainer.**
+- **Multisite (maintainer decision gate).** The sketched schema is redundant: it uses `$wpdb->prefix` (per-blog) **and** a `blog_id` column. Only one of these can be the answer. Per-blog tables with `$wpdb->prefix` are idiomatic WordPress and make per-site uninstall / export trivial; one global table with `blog_id` is cheaper for operators running many small sites and centralises the rebuild. This choice gates the schema, the rebuild command's iteration model, and the uninstall story. **Pick one before follow-up issue #1 opens.** Recommendation leans toward per-blog via `$wpdb->prefix` and dropping the `blog_id` column, since single-site is the overwhelmingly common case and multisite operators already expect per-blog tables.
 - **WPML vs Polylang.** Both set a post language. Do we write one row per (attachment, language) — which bloats the table by the language count — or one row that includes all language variants? Current sketch assumes WPML-style duplication (one row per translated post), since WPML itself treats translations as separate posts with different IDs. Polylang may need different handling.
 - **GDPR / uninstall.** `uninstall.php` currently does nothing. Phase 3 adds: `DROP TABLE {$prefix}mse_search_index; delete_option('mse_search_index_version'); delete_option('mse_search_index_rebuild_state');`. Multisite uninstall must iterate sites.
 - **`wp_delete_attachment` during backfill.** The hook already fires in parallel with the rebuild loop. Our `upsert` is idempotent and `get_post` returns null for deleted posts, so the race is self-healing — but worth a test.
@@ -365,6 +365,8 @@ These must be resolved before the first Phase 3 PR lands.
 See `includes/class-mse-search-index.php` (skeleton class — **not wired into plugin bootstrap**) and `tests/Phase3SpikeTest.php`. The spike verifies one thing and one thing only:
 
 > `posts_clauses` can inject `AND {$posts}.ID IN (...)` alongside the existing suppress-core-search + private-post visibility widening, without breaking the existing search-fields filter or returning a different set of rows than a LIKE-path query with the same matching IDs would.
+
+Code-shape caveat: the spike adds a second `posts_clauses` filter at priority 50 to layer on top of the plugin's own priority-20 callback. The production read path (follow-up issue #3) will instead collapse Phase 1's LIKE builder and the index's `ID IN` emission into the same priority-20 method. The spike validates the SQL interop — whether the two fragments can coexist in one WHERE — not the final code layout.
 
 Everything else in this document — schema DDL, FULLTEXT parser choice, WP-CLI rebuild, Action Scheduler fan-out — is mechanical once that load-bearing unknown is settled.
 
