@@ -11,9 +11,8 @@
     {
       "step": "installPlugin",
       "pluginData": {
-        "resource": "git:directory",
-        "url": "https://github.com/1fixdotio/media-search-enhanced.git",
-        "ref": "master"
+        "resource": "url",
+        "url": "https://github.com/1fixdotio/media-search-enhanced/releases/download/1.0.0/media-search-enhanced.zip"
       },
       "options": { "activate": true }
     },
