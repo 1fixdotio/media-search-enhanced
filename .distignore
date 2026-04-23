@@ -6,6 +6,7 @@
 /vendor
 /node_modules
 /benchmarks
+/blueprint
 /.playwright-cli
 .gitignore
 .distignore
