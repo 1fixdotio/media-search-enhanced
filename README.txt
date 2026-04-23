@@ -13,6 +13,8 @@ Search through all fields in Media Library.
 
 == Description ==
 
+**Try it live in your browser** — [launch the WordPress Playground demo](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/master/blueprint/playground.blueprint.json). Boots a WordPress instance with this plugin active and a Media Library seeded with 8 attachments, so you can see the cross-field search in action immediately. Searching `mountain` returns 6 hits (matches in filename and alt text included) — core WordPress search would only find 3.
+
 This plugin is made for:
 
 * Search through all fields in Media Library, including: ID, title, caption, alternative text and description.
