@@ -66,13 +66,13 @@ The script rewrites the `raw.githubusercontent.com/.../<ref>/blueprint/...` URLs
 
 ## Bumping the pinned release
 
-`pluginData` points at the release zip built by `.github/workflows/deploy.yml` (via `10up/action-wordpress-plugin-deploy`). When you publish a new release (e.g. `1.1.0`), update the URL in `playground.blueprint.json`:
+`pluginData` points at the release zip built by `.github/workflows/deploy.yml` (via `10up/action-wordpress-plugin-deploy`). Current pin: `1.0.0`. When you publish a new release, update the version segment in `playground.blueprint.json`:
 
 ```json
 "pluginData": {
   "resource": "url",
-  "url": "https://github.com/1fixdotio/media-search-enhanced/releases/download/1.1.0/media-search-enhanced.zip"
+  "url": "https://github.com/1fixdotio/media-search-enhanced/releases/download/<NEW_VERSION>/media-search-enhanced.zip"
 }
 ```
 
-Only the version segment changes. The zip is always named `media-search-enhanced.zip` and is attached to the release automatically by the deploy workflow.
+Replace `<NEW_VERSION>` with the release tag (e.g. `1.0.1`, `1.1.0`). Only the version segment changes — the zip is always named `media-search-enhanced.zip` and is attached to the release automatically by the deploy workflow.
