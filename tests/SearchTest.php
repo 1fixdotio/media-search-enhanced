@@ -379,7 +379,7 @@ class SearchTest extends WP_UnitTestCase {
 		$id = $this->create_attachment( array( 'post_title' => 'ajax-fallback-test' ) );
 
 		// Simulate the AJAX media modal request.
-		add_filter( 'mse_is_media_modal_request', '__return_true' );
+		add_filter( 'mse_allow_multi_term_search', '__return_true' );
 		$_REQUEST['query']  = array(
 			's'         => 'ajax-fallback-test',
 			'post_type' => 'attachment',
@@ -446,10 +446,10 @@ class SearchTest extends WP_UnitTestCase {
 
 	/**
 	 * Test 19: Comma-separated search finds attachments matching ANY term.
-	 * Multi-term search is restricted to the admin media modal context.
+	 * Multi-term search is gated to the WordPress admin; the filter forces it on here.
 	 */
 	public function test_comma_separated_search() {
-		add_filter( 'mse_is_media_modal_request', '__return_true' );
+		add_filter( 'mse_allow_multi_term_search', '__return_true' );
 
 		$id_a = $this->create_attachment( array( 'post_title' => 'alpha-comma-test' ) );
 		$id_b = $this->create_attachment( array( 'post_title' => 'bravo-comma-test' ) );
@@ -458,12 +458,38 @@ class SearchTest extends WP_UnitTestCase {
 		try {
 			$results = $this->search_attachments( 'alpha-comma-test, bravo-comma-test' );
 		} finally {
-			remove_filter( 'mse_is_media_modal_request', '__return_true' );
+			remove_filter( 'mse_allow_multi_term_search', '__return_true' );
 		}
 
 		$this->assertContains( $id_a, $results, 'Should find attachment matching first term.' );
 		$this->assertContains( $id_b, $results, 'Should find attachment matching second term.' );
 		$this->assertNotContains( $id_c, $results, 'Should not find attachment matching neither term.' );
+	}
+
+	/**
+	 * Test 19b: Default admin context enables multi-term search without any filter.
+	 *
+	 * Proves that `is_admin() === true` is sufficient to trigger the comma split —
+	 * no `mse_allow_multi_term_search` override required. This is the behaviour
+	 * the Media Library list view (`upload.php`) and other admin screens rely on.
+	 */
+	public function test_comma_separated_search_in_admin_by_default() {
+		set_current_screen( 'upload.php' );
+
+		$id_a = $this->create_attachment( array( 'post_title' => 'admin-default-alpha' ) );
+		$id_b = $this->create_attachment( array( 'post_title' => 'admin-default-bravo' ) );
+		$id_c = $this->create_attachment( array( 'post_title' => 'admin-default-charlie-no-match' ) );
+
+		try {
+			$this->assertTrue( is_admin(), 'set_current_screen() should flip is_admin() to true.' );
+			$results = $this->search_attachments( 'admin-default-alpha, admin-default-bravo' );
+		} finally {
+			set_current_screen( 'front' );
+		}
+
+		$this->assertContains( $id_a, $results, 'Admin default should match first term.' );
+		$this->assertContains( $id_b, $results, 'Admin default should match second term.' );
+		$this->assertNotContains( $id_c, $results, 'Admin default should not match unrelated attachment.' );
 	}
 
 	/**
@@ -483,7 +509,7 @@ class SearchTest extends WP_UnitTestCase {
 	 * Test 20: Comma-separated search across different fields.
 	 */
 	public function test_comma_search_across_fields() {
-		add_filter( 'mse_is_media_modal_request', '__return_true' );
+		add_filter( 'mse_allow_multi_term_search', '__return_true' );
 
 		$id_by_title = $this->create_attachment( array( 'post_title' => 'multi-field-title-match' ) );
 		$id_by_alt   = $this->create_attachment( array( 'post_title' => 'unrelated-alt-holder' ) );
@@ -492,7 +518,7 @@ class SearchTest extends WP_UnitTestCase {
 		try {
 			$results = $this->search_attachments( 'multi-field-title-match, multi-field-alt-match' );
 		} finally {
-			remove_filter( 'mse_is_media_modal_request', '__return_true' );
+			remove_filter( 'mse_allow_multi_term_search', '__return_true' );
 		}
 
 		$this->assertContains( $id_by_title, $results, 'Should find attachment matching by title.' );
@@ -503,14 +529,14 @@ class SearchTest extends WP_UnitTestCase {
 	 * Test 21: Empty terms from extra commas are ignored.
 	 */
 	public function test_comma_search_ignores_empty_terms() {
-		add_filter( 'mse_is_media_modal_request', '__return_true' );
+		add_filter( 'mse_allow_multi_term_search', '__return_true' );
 
 		$id = $this->create_attachment( array( 'post_title' => 'empty-comma-test' ) );
 
 		try {
 			$results = $this->search_attachments( ',, empty-comma-test ,,' );
 		} finally {
-			remove_filter( 'mse_is_media_modal_request', '__return_true' );
+			remove_filter( 'mse_allow_multi_term_search', '__return_true' );
 		}
 
 		$this->assertContains( $id, $results, 'Should find attachment despite extra commas.' );
@@ -520,7 +546,8 @@ class SearchTest extends WP_UnitTestCase {
 	 * Test 21b: Frontend search treats commas literally (no splitting).
 	 */
 	public function test_frontend_comma_search_is_literal() {
-		// No $_REQUEST['action'] = 'query-attachments' — simulates frontend search.
+		// No admin context in this test run, so is_admin() is false and the
+		// multi-term gate stays closed — the comma is matched literally.
 		$id_a = $this->create_attachment( array( 'post_title' => 'frontend-alpha-test' ) );
 		$id_b = $this->create_attachment( array( 'post_title' => 'frontend-bravo-test' ) );
 
@@ -534,14 +561,14 @@ class SearchTest extends WP_UnitTestCase {
 	 * Must be authenticated to exercise the comma-splitting + empty guard path.
 	 */
 	public function test_all_commas_search_returns_empty() {
-		add_filter( 'mse_is_media_modal_request', '__return_true' );
+		add_filter( 'mse_allow_multi_term_search', '__return_true' );
 
 		$id = $this->create_attachment( array( 'post_title' => 'should-not-appear' ) );
 
 		try {
 			$results = $this->search_attachments( ',,,' );
 		} finally {
-			remove_filter( 'mse_is_media_modal_request', '__return_true' );
+			remove_filter( 'mse_allow_multi_term_search', '__return_true' );
 		}
 
 		$this->assertEmpty( $results, 'Search with only commas should return no results.' );
@@ -551,7 +578,7 @@ class SearchTest extends WP_UnitTestCase {
 	 * Test 22: Terms are capped at 10.
 	 */
 	public function test_comma_search_caps_at_10_terms() {
-		add_filter( 'mse_is_media_modal_request', '__return_true' );
+		add_filter( 'mse_allow_multi_term_search', '__return_true' );
 
 		// Use non-overlapping names (alpha, bravo, etc.) to avoid LIKE substring matches.
 		$names = array( 'alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel', 'india', 'juliet', 'kilo', 'lima' );
@@ -565,7 +592,7 @@ class SearchTest extends WP_UnitTestCase {
 		try {
 			$results = $this->search_attachments( $search, array( 'posts_per_page' => -1 ) );
 		} finally {
-			remove_filter( 'mse_is_media_modal_request', '__return_true' );
+			remove_filter( 'mse_allow_multi_term_search', '__return_true' );
 		}
 
 		// First 10 terms should match.

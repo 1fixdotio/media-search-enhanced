@@ -179,11 +179,11 @@ class QueryStructureTest extends WP_UnitTestCase {
 	 * Assert multi-term (comma-separated) search generates OR groups.
 	 */
 	public function test_multi_term_search_generates_or_groups() {
-		add_filter( 'mse_is_media_modal_request', '__return_true' );
+		add_filter( 'mse_allow_multi_term_search', '__return_true' );
 
 		$result = $this->capture_query( 'alpha-term, beta-term' );
 
-		remove_filter( 'mse_is_media_modal_request', '__return_true' );
+		remove_filter( 'mse_allow_multi_term_search', '__return_true' );
 
 		$this->assertNotEmpty( $result['sql'], 'Should have captured the search SQL.' );
 
