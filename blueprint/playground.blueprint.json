@@ -1,0 +1,41 @@
+{
+  "$schema": "https://playground.wordpress.net/blueprint-schema.json",
+  "meta": {
+    "title": "Media Search Enhanced — Cross-field Search Demo",
+    "author": "1fixdotio",
+    "description": "Seeded Media Library demonstrating search across title, filename, alt text, caption, description, and ID. Search 'mountain' to see 6 hits (core WP would find only 3)."
+  },
+  "login": true,
+  "landingPage": "/wp-admin/upload.php?mode=list&s=mountain",
+  "steps": [
+    {
+      "step": "installPlugin",
+      "pluginData": {
+        "resource": "git:directory",
+        "url": "https://github.com/1fixdotio/media-search-enhanced.git",
+        "ref": "master"
+      },
+      "options": { "activate": true }
+    },
+    {
+      "step": "writeFile",
+      "path": "/wordpress/wp-content/mu-plugins/mse-demo-notice.php",
+      "data": {
+        "resource": "url",
+        "url": "https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/master/blueprint/seed/mu-demo-notice.php"
+      }
+    },
+    {
+      "step": "writeFile",
+      "path": "/tmp/mse-seed.php",
+      "data": {
+        "resource": "url",
+        "url": "https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/master/blueprint/seed/seed-media.php"
+      }
+    },
+    {
+      "step": "runPHP",
+      "code": "<?php require_once '/wordpress/wp-load.php'; require '/tmp/mse-seed.php';"
+    }
+  ]
+}
