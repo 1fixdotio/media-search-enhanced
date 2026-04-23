@@ -62,6 +62,8 @@ git commit -am "test: retarget Blueprint back to master" && git push
 
 The script rewrites the `raw.githubusercontent.com/.../<ref>/blueprint/...` URLs in both files. Don't forget the swap-back — if a PR lands on `master` still pointing at a branch name, the live demo will break.
 
+**Scope of branch testing.** `retarget.sh` covers the demo scaffolding only: the seed script, the mu-plugin notice, and the seed images. It does **not** swap `pluginData` — the Playground always installs the pinned release zip. If you need to test plugin code changes in Playground, cut a pre-release (e.g. `1.1.0-rc1`), update the pin URL on a branch, and test that. Day-to-day plugin development uses `composer test` rather than Playground.
+
 ## Bumping the pinned release
 
 `pluginData` points at the release zip built by `.github/workflows/deploy.yml` (via `10up/action-wordpress-plugin-deploy`). When you publish a new release (e.g. `1.1.0`), update the URL in `playground.blueprint.json`:
