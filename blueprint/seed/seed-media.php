@@ -20,7 +20,7 @@ if ( get_option( 'mse_demo_seeded' ) ) {
 	return;
 }
 
-$base_url = 'https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/pin-blueprint-to-v1-0-0/blueprint/seed/images/';
+$base_url = 'https://raw.githubusercontent.com/1fixdotio/media-search-enhanced/master/blueprint/seed/images/';
 
 $upload     = wp_upload_dir();
 $target_dir = $upload['path'];
