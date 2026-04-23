@@ -2,6 +2,7 @@
   "$schema": "https://playground.wordpress.net/blueprint-schema.json",
   "meta": {
     "title": "Media Search Enhanced — Cross-field Search Demo",
+    "author": "1fixdotio",
     "description": "Seeded Media Library demonstrating search across title, filename, alt text, caption, description, and ID. Search 'mountain' to see 6 hits (core WP would find only 3)."
   },
   "login": true,
