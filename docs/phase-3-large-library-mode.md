@@ -360,22 +360,12 @@ These must be resolved before the first Phase 3 PR lands.
 
 ---
 
-## Appendix A: what the spike actually proved
+## Appendix A: load-bearing unknown verified during exploration
 
-See `includes/class-mse-search-index.php` (skeleton class — **not wired into plugin bootstrap**) and `tests/Phase3SpikeTest.php`. The spike verifies one thing and one thing only:
+Before writing this document, a throwaway spike (not shipped — kept on a private branch during exploration) verified the single load-bearing unknown:
 
 > `posts_clauses` can inject `AND {$posts}.ID IN (...)` alongside the existing suppress-core-search + private-post visibility widening, without breaking the existing search-fields filter or returning a different set of rows than a LIKE-path query with the same matching IDs would.
 
-Code-shape caveat: the spike adds a second `posts_clauses` filter at priority 50 to layer on top of the plugin's own priority-20 callback. The production read path (follow-up issue #3) will instead collapse Phase 1's LIKE builder and the index's `ID IN` emission into the same priority-20 method. The spike validates the SQL interop — whether the two fragments can coexist in one WHERE — not the final code layout.
+The spike layered a second `posts_clauses` filter at priority 50 on top of the plugin's existing priority-20 callback to demonstrate SQL interop in isolation. The production read path (follow-up issue #3) should instead collapse Phase 1's LIKE builder and the index's `ID IN` emission into the same priority-20 method — and re-verify the contract with explicit tests covering the search-fields filter, private-post visibility, and zero-match cases.
 
 Everything else in this document — schema DDL, FULLTEXT parser choice, WP-CLI rebuild, Action Scheduler fan-out — is mechanical once that load-bearing unknown is settled.
-
-Next steps not covered by the spike (implementation issues, see section 10):
-
-- actual `CREATE TABLE` / `dbDelta` call (method exists in skeleton, unwired)
-- write hooks (no hooks registered)
-- query that reads from FULLTEXT (method stub returns hardcoded IDs)
-- WP-CLI command
-- language / blog_id filtering
-- rebuild / backfill
-- uninstall
