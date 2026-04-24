@@ -81,32 +81,39 @@ Trade-offs:
 - **Con:** Cannot filter by field at query time — a FULLTEXT index does not know `"Sunset" came from alt_text vs title`.
 - **Con:** Subject to `innodb_ft_min_token_size` (default 3) and stopword list. See section 3.
 
-### Recommendation: **hybrid — candidate (b) with a documented semantic shift for `mse_search_fields`**
+### Recommendation: **candidate (b) with denormalized filter columns and an explicit state field**
 
-Schema:
+Schema (revised after PR #25 review — see "Resolved during review" in §11 for the iteration trail):
 
 ```sql
 CREATE TABLE {$prefix}mse_search_index (
-  attachment_id  BIGINT UNSIGNED NOT NULL PRIMARY KEY,
-  searchable     MEDIUMTEXT NOT NULL,          -- field values joined with a separator
-  searchable_short VARCHAR(191) NOT NULL,      -- filename + title for LIKE fallback (sub-min-token-size terms)
-  language_code  VARCHAR(16) NOT NULL DEFAULT '',
-  blog_id        BIGINT UNSIGNED NOT NULL DEFAULT 1,
-  updated_at     DATETIME NOT NULL,
+  attachment_id   BIGINT UNSIGNED NOT NULL,
+  language_code   VARCHAR(16)     NOT NULL DEFAULT '',
+  searchable      MEDIUMTEXT      NOT NULL,        -- field values joined with a separator
+  -- Denormalized filter columns: required so the index query can apply
+  -- WP_Query's MIME / date / parent / status filters BEFORE the LIMIT.
+  -- Without these, LIMIT 1000 in the index step can drop valid rows that
+  -- the outer WP_Query would have kept.
+  post_mime_type  VARCHAR(100)    NOT NULL DEFAULT '',
+  post_date       DATETIME        NOT NULL,
+  post_parent     BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  post_status     VARCHAR(20)     NOT NULL DEFAULT 'inherit',
+  post_author     BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  updated_at      DATETIME        NOT NULL,
+  PRIMARY KEY (attachment_id, language_code),
   FULLTEXT KEY ft_searchable (searchable) /*!50700 WITH PARSER ngram */,
-  KEY ix_short (searchable_short(191)),
-  KEY ix_scope (blog_id, language_code)
+  KEY ix_filters (post_mime_type, post_date, post_parent, post_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-Why hybrid wins:
+Why this shape:
 
-1. `searchable` is the main payload, built at write time from the fields the site has enabled via `mse_search_fields`. Disabled fields are **not written into the index** — this redefines the filter as an indexing-time filter, not a query-time one. Toggling the filter requires a rebuild; the README must call this out explicitly.
-2. `searchable_short` catches the `innodb_ft_min_token_size` footgun (see section 3) by keeping title+filename searchable via a regular BTREE prefix for short/rare-token queries that FULLTEXT cannot tokenize. It is the "LIKE fallback" the spike verifies is wirable.
-3. Taxonomy terms and alt text get stuffed into `searchable` (see section 8) so the taxonomy join disappears entirely — which is the single largest structural win available.
-4. The `mse_search_fields` filter retains its current semantics **when large-library mode is off**. When on, the filter runs at **index write time** instead of query time. Existing Phase 1 callsites keep working; the change is clearly documented and gated on the large-library constant.
-
-This is an intentional semantic shift. It is the only honest answer: a FULLTEXT inverted index cannot be filtered per-field at query time, and per-column LIKE would defeat the point of having FULLTEXT.
+1. **`searchable` is the main payload**, built at write time from the fields enabled via `mse_search_fields`. Disabled fields are **not written into the index** — this redefines the filter as an indexing-time filter, not a query-time one. Toggling the filter requires a rebuild; see §6 for the schema-version handshake that enforces this.
+2. **Denormalized filter columns (`post_mime_type`, `post_date`, `post_parent`, `post_status`, `post_author`)** let the index query apply WP_Query's filters before `LIMIT 1000`. Without them, the LIMIT is applied first and a search that matches 5,000 attachments — only 100 of which are JPGs the user filtered on — could miss most or all of the JPGs. See §5 for the corrected query shape. Trade-off accepted: any change to those columns triggers an `upsert`; in practice they change rarely.
+3. **Taxonomy terms and alt text get stuffed into `searchable`** (see §8) so the taxonomy join disappears entirely — the single largest structural win available.
+4. **`PRIMARY KEY (attachment_id, language_code)` is composite** to support per-language rows on WPML where translations have separate post IDs but a site that wants per-language indexing still needs the language column distinguished. On non-multilingual sites `language_code = ''` for every row and the composite key collapses to one row per attachment.
+5. **No `searchable_short` LIKE-fallback column.** Earlier drafts proposed this but it was wrong on two counts: (a) `LIKE '%term%'` is not sargable on a BTREE prefix index — the BTREE doesn't help — and (b) restricting it to title + filename meant short-token queries would silently miss alt text, taxonomy, and caption matches that the main index does cover. See §3 for the actual short-token strategy (ngram parser + Phase 1 fallback for sub-2-character tokens).
+6. The `mse_search_fields` filter retains its current semantics **when large-library mode is off**. When on, it runs at **index write time** instead of query time — an intentional semantic shift, the only honest answer for a FULLTEXT inverted index.
 
 **Per-field disable (`mse_search_fields`) → index-time effect.** Calling `mse_search_fields` with `guid=false` in large-library mode means "when I next write attachment N into the index, do not include its GUID in the `searchable` blob." Operationally: toggling the filter invalidates the index (rebuild required). The plugin should expose `mse_search_index_version()` and compare against a stored version on each query; mismatch → fall back to the Phase 1 query path until rebuild completes.
 
@@ -114,60 +121,44 @@ This is an intentional semantic shift. It is the only honest answer: a FULLTEXT 
 
 A sibling filter `mse_large_library_search_fields` was considered as an alternative — it would let sites express two different field configs (one for the Phase 1 path, one for the index path) without surprise. **Rejected for v1** because it doubles the configuration surface for a feature most sites won't enable; revisit if real-world usage shows confusion. Tracked as a follow-up consideration rather than a v1 deliverable.
 
-**WPML / Polylang.** One row per attachment per language. The `language_code` column is populated from `sitepress->get_current_language()` (WPML) or `pll_get_post_language()` (Polylang) at write time. Queries filter on `language_code = ?` matching the request language. If the site has neither, `language_code=''` for all rows.
+**WPML / Polylang.** The `language_code` column **must be derived from the attachment itself, not from the request context**, so CLI rebuilds and background queue handlers (which have no request language) write the correct value. Sources:
+
+- WPML: `apply_filters( 'wpml_post_language_details', null, $attachment_id )` returns the post's own language; use the `language_code` field of that result.
+- Polylang: `pll_get_post_language( $attachment_id, 'slug' )`.
+- Sites with neither: `language_code = ''` for every row.
+
+Read-path queries filter on `language_code = ?` where `?` is the **request** language (`ICL_LANGUAGE_CODE` for WPML, `pll_current_language()` for Polylang). The mismatch is intentional: write-time honors the post's identity, read-time honors the user's session.
+
+WPML stores translations as separate posts with separate IDs, so each translation gets its own row keyed by its own `(attachment_id, language_code)` tuple. Polylang stores translations as a single post with associated language metadata, so for Polylang we still write one row per attachment, with the language taken from `pll_get_post_language`.
 
 ---
 
-## 3. Index strategy: FULLTEXT vs LIKE on the index table
+## 3. Short tokens, parser choice, and stopwords
 
-### The `innodb_ft_min_token_size` footgun
+### Short-token strategy
 
-MySQL's InnoDB FULLTEXT parser default is `innodb_ft_min_token_size = 3`. Tokens shorter than 3 characters are **silently dropped from the index**. That means:
+MySQL's InnoDB FULLTEXT default `innodb_ft_min_token_size = 3` drops tokens shorter than 3 characters. For Western text this matters less than it sounds; for CJK and short proper nouns (`"AI"`, `"v2"`, `"UX"`, `"3D"`) it would be a real regression.
 
-- `"AI"`, `"v2"`, `"UX"`, `"3D"` → not tokenized, not matched.
-- Two-character CJK substrings (very common) → not tokenized under the default parser.
-- Short numeric IDs searchable as tokens (`"42"`) → dropped.
+**Recommendation: ship the ngram parser (`WITH PARSER ngram`, default `ngram_token_size = 2`).** Under ngram, 2-character tokens — including all 2-character CJK substrings — are tokenized natively. This covers the practical short-token cases without forcing operators to change MySQL server config.
 
-This is the single most surprising failure mode. We have three options:
+**1-character queries:** unsupported by FULLTEXT regardless of parser. The read path falls back to the Phase 1 LIKE query for **any search whose smallest token is shorter than 2 characters**. This is rare enough in attachment-search workloads that we accept the perf hit when it happens. The earlier `searchable_short` BTREE-prefix column is gone — `LIKE '%x%'` is not sargable on a BTREE, so it would have been a full scan dressed up as an index lookup, and it would have silently dropped alt-text / taxonomy / caption matches that the main `searchable` blob does cover.
 
-1. **Require site owner to lower `innodb_ft_min_token_size` to 2 or 1.** Requires a server restart and an `ALTER TABLE … DROP INDEX / ADD FULLTEXT INDEX` rebuild. Not a blocker for a self-hosted admin, but unacceptable on managed WordPress hosts. **Reject** — we cannot assume MySQL config control.
-2. **Accept the limitation.** Document it prominently. Small tokens fall through to `searchable_short` LIKE fallback.
-3. **Fall back to LIKE for short queries.** Query path: if `strlen($term) < innodb_ft_min_token_size`, run `LIKE '%term%'` against `searchable_short` instead of `MATCH`. This is the recommended approach.
+### Parser availability per engine
 
-### CJK support
+| Engine          | InnoDB FULLTEXT | `WITH PARSER ngram` | Behavior on Phase 3 |
+|---|---|---|---|
+| MySQL 5.7+      | yes             | yes                 | Full support; schema includes `WITH PARSER ngram`. |
+| MariaDB 10.0.5+ | yes             | **no** (not shipped) | Schema migration omits the parser clause; default parser is used. CJK and 2-character Latin tokens degrade — document as a known limitation; CJK-heavy MariaDB sites should stay on Phase 1. |
 
-MySQL 5.7+ ships the `ngram` parser for bigram-based CJK indexing (`ngram_token_size = 2` default). MariaDB 10.0.5+ ships the `mroonga` engine / Mecab parser, but that's not universally available.
-
-Recommendation: add `WITH PARSER ngram` to the FULLTEXT index. This:
-- Makes 2-char CJK substrings tokenizable.
-- Does **not** regress Latin-script behavior (ngram indexes non-whitespace sequences as bigrams, and whitespace-separated Latin text is handled by the default parser path for `MATCH … IN BOOLEAN MODE` with quoted terms — but bigram on Latin text changes relevance ranking).
-- **Caveat:** under `ngram`, `MATCH('searchable') AGAINST ('sunset' IN BOOLEAN MODE)` against text containing `sunset` may behave differently than the default parser. We should benchmark both parsers on a representative Latin-only corpus before committing.
-
-**Open question:** Do we ship one FULLTEXT index (ngram) or two (ngram + default)? Two indexes double write cost but allow script-appropriate search. Tentative recommendation: one ngram index, with a fallback to `searchable_short` LIKE for exact-phrase needs. Revisit after benchmarks.
+The schema migration (follow-up issue #1) MUST detect the engine via `SELECT VERSION()` and emit the `WITH PARSER ngram` clause only when the server identifies as MySQL (not `MariaDB` substring). The activation check should also surface a `_doing_it_wrong()` notice on MariaDB to set CJK expectations.
 
 ### Stopword list
 
-InnoDB ships a default stopword list including `"a"`, `"the"`, `"is"`, etc. These are dropped from the index silently. For attachment search this is mostly fine — nobody searches for a photo by typing "the". Document the behavior and point to `information_schema.INNODB_FT_DEFAULT_STOPWORD` for operators who want to override via `innodb_ft_server_stopword_table`.
+InnoDB ships a default stopword list including `"a"`, `"the"`, `"is"`, etc. — dropped silently from the index. For attachment search this is mostly fine. Document the behavior and point to `information_schema.INNODB_FT_DEFAULT_STOPWORD` for operators who want to override via `innodb_ft_server_stopword_table`.
 
 ### Query shape
 
-```sql
--- Primary path (term length >= innodb_ft_min_token_size):
-SELECT attachment_id
-FROM {$prefix}mse_search_index
-WHERE blog_id = ? AND language_code = ?
-  AND MATCH(searchable) AGAINST (? IN BOOLEAN MODE)
-LIMIT 1000;
-
--- Fallback path (short terms):
-SELECT attachment_id
-FROM {$prefix}mse_search_index
-WHERE blog_id = ? AND language_code = ?
-  AND searchable_short LIKE CONCAT('%', ?, '%')
-LIMIT 1000;
-```
-
-Results flow into `posts_clauses` as `AND {$posts}.ID IN (...)`. See section 5.
+The actual query is in §5 (it includes the denormalized filter columns). The relevant point for this section: only one path reads from the index (FULLTEXT), and short-token searches bypass the index entirely by routing back through the Phase 1 LIKE callback.
 
 ---
 
@@ -177,9 +168,10 @@ The index has to stay consistent with the source of truth in `wp_posts`, `wp_pos
 
 | Hook | When | What the index does |
 |---|---|---|
-| `add_attachment` (int $post_id) | New attachment inserted | `upsert($post_id)` — compose searchable text from enabled fields, write row |
-| `attachment_updated` (int $post_id, WP_Post $after, WP_Post $before) | Title/content/excerpt/guid changed | `upsert($post_id)` |
-| `delete_attachment` (int $post_id) | Attachment hard-deleted | `DELETE FROM mse_search_index WHERE attachment_id = $post_id` |
+| `add_attachment` (int $post_id) | New attachment inserted | `upsert($post_id)` — compose `searchable` blob from enabled fields, capture denormalized filter columns (`post_mime_type`, `post_date`, `post_parent`, `post_status`, `post_author`), write row |
+| `attachment_updated` (int $post_id, WP_Post $after, WP_Post $before) | Title/content/excerpt/guid/mime/date/parent changed | `upsert($post_id)` — covers most filter-column changes since they go through `wp_update_post` |
+| `transition_post_status` ($new, $old, WP_Post $post) | Attachment moves between `inherit` / `private` / etc. | If `$post->post_type === 'attachment'` and `$new !== $old`, `upsert($post->ID)` to refresh the denormalized `post_status` column |
+| `delete_attachment` (int $post_id) | Attachment hard-deleted | `DELETE FROM mse_search_index WHERE attachment_id = $post_id` (cascades across all language rows via the composite PK) |
 | `updated_post_meta` (int $meta_id, int $post_id, string $meta_key, mixed $meta_value) | `_wp_attachment_image_alt` or `_wp_attached_file` changed | If `get_post_type($post_id) === 'attachment'` and `$meta_key` is in our tracked set, `upsert($post_id)` |
 | `added_post_meta` / `deleted_post_meta` | Same meta keys added/deleted | Same as above |
 | `set_object_terms` (int $object_id, array $terms, array $tt_ids, string $taxonomy) | Taxonomy terms changed on an attachment | If `$taxonomy` is attachment-bound and `get_post_type($object_id) === 'attachment'`, `upsert($object_id)` |
@@ -197,11 +189,35 @@ The index has to stay consistent with the source of truth in `wp_posts`, `wp_pos
 
 ### Option (a): short-circuit in `posts_clauses`, inject `ID IN (...)`
 
-Same bootstrap as current plugin: `posts_search` returns empty to suppress core's LIKE fragment, `posts_clauses` appends our conditions. In large-library mode, `posts_clauses` instead queries `mse_search_index` directly, collects matching `attachment_id`s, and appends `AND {$posts}.ID IN (1,2,3,...)`.
+Same bootstrap as current plugin: `posts_search` returns empty to suppress core's LIKE fragment, `posts_clauses` appends our conditions. In large-library mode, `posts_clauses` instead queries `mse_search_index` — applying the **same** WP_Query filters denormalized into the index — collects matching `attachment_id`s, and appends `AND {$posts}.ID IN (1,2,3,...)`.
+
+The denormalization is the load-bearing correctness fix: the LIMIT in the index query is meaningful only because the filters have already been applied. If we did `SELECT id ... MATCH ... LIMIT 1000` and then let WP_Query filter the resulting 1,000 IDs, a search matching 5,000 attachments — only 100 of which are JPGs the user is filtering on — would silently miss most or all of the JPGs.
+
+```sql
+-- Index query, parameterized from WP_Query's $query_vars at call time.
+-- Filter clauses are conditional — only included when WP_Query has them set.
+SELECT attachment_id
+FROM {$prefix}mse_search_index
+WHERE language_code = ?
+  AND MATCH(searchable) AGAINST (? IN BOOLEAN MODE)
+  -- visibility: anonymous + non-author users see only inherit;
+  -- read_private_posts users see inherit + private; logged-in non-cap
+  -- users see inherit + their own private rows
+  AND post_status IN (?, ?)
+  AND ( post_status = 'inherit' OR post_author = ? )
+  -- conditional filters, injected only when set on WP_Query
+  AND post_mime_type IN (?, ?, ?)   -- if 'post_mime_type' set
+  AND post_date BETWEEN ? AND ?     -- if date_query set
+  AND post_parent = ?               -- if 'post_parent' set
+ORDER BY post_date DESC
+LIMIT 1000;
+```
+
+Then the PHP wrapper:
 
 ```php
 // Large-library branch of posts_clauses.
-$ids = $index->query( $terms, $language, get_current_blog_id() );
+$ids = $index->query( $terms, $language, $query->query_vars );
 if ( empty( $ids ) ) {
     $pieces['where'] .= ' AND 1=0';
     return $pieces;
@@ -211,13 +227,11 @@ $pieces['where'] .= " AND {$wpdb->posts}.ID IN ( $ids_sql )";
 return $pieces;
 ```
 
-WP core still applies `post_status`, `post_type`, `post_mime_type`, `post_parent`, date filters, `read_private_posts` visibility. The existing `str_replace` that widens `post_status = 'inherit'` to include `'private'` **still runs**, because we stay in `posts_clauses`. That is the single biggest correctness win of option (a).
+WP core's `posts_clauses` still applies `post_status`, `post_type`, `post_mime_type`, `post_parent`, date filters, `read_private_posts` visibility on top. Those filters now run as harmless duplicates (the index already enforced them); the existing `str_replace` that widens `post_status = 'inherit'` to include `'private'` **still runs**, because we stay in `posts_clauses`. That is the single biggest correctness win of option (a).
 
-**Result-set ceiling and pagination.** `IN (...)` is fine for up to ~5k ids; past that MySQL's parser starts complaining (`max_allowed_packet` / stack depth). The index query uses `LIMIT 1000` by default, filterable via `mse_search_index_limit`.
+**Result cap.** `LIMIT 1000` is a true cap on filtered+ordered results — operators see "the first 1,000 matching all filters by `post_date DESC`." The cap is filterable via `mse_search_index_limit`. If the index query returns exactly the cap, the read path emits `_doing_it_wrong()` once per request: "Search exceeded the result cap; narrow with MIME / date / parent filters or raise `mse_search_index_limit`." Without the cap warning the operator has no signal that they may be missing matches.
 
-This is an explicit **hard cap, not a paginated window**. A search matching 5,000 attachments returns the first 1,000 by `post_date DESC` ordering; the WordPress admin pagination control above page N (where N × per-page > 1000) returns no results. The accepted UX contract is: "If your search exceeds the cap, narrow with MIME type / date / parent filters in the media-modal sidebar." This matches how operators already work around large-library performance today.
-
-Cursor-based pagination (passing the last-seen `attachment_id` or last-seen `post_date` to subsequent queries) was considered and **deferred**. It would require either replacing `WP_Query` (rejected as option (b) below) or layering an extra round-trip per pagination click; neither is justified in v1 for a feature whose primary win is search latency, not result-set depth. Tracked as a future enhancement only if real-world feedback shows the cap is a frequent blocker.
+Cursor-based pagination (passing the last-seen `attachment_id` or last-seen `post_date` to subsequent queries) was considered and **deferred** for v1. It would require replacing `WP_Query` (rejected as option (b) below) or layering an extra round-trip per pagination click; not justified for a feature whose primary win is search latency, not result-set depth. Tracked as a future enhancement only if real-world feedback shows the cap is a frequent blocker.
 
 ### Option (b): replace `WP_Query` entirely
 
@@ -273,9 +287,31 @@ Behavior:
 
 For sites without WP-CLI access (rare on large libraries but possible), an admin-initiated background job using Action Scheduler (bundled with WooCommerce; add it as a soft dependency) can run the same batching logic. Keep this behind a second feature flag — we don't want to pull in AS unconditionally.
 
+### Index state machine
+
+A boolean "is the index built" check is not safe: a partially populated table can satisfy "row count > 0" while still returning incomplete search results during backfill. The read path needs an explicit state field, not an inference from row count.
+
+Stored in `wp_options` as `mse_search_index_state`, with values:
+
+| State      | Meaning                                                                 | Read path |
+|---|---|---|
+| `empty`    | Default after table creation. No rebuild has run.                       | Fall back to Phase 1. |
+| `building` | Rebuild in progress (or crashed mid-rebuild — same observed state).     | Fall back to Phase 1. |
+| `ready`    | Rebuild completed successfully and the table is consistent with `wp_posts`. | Use the index. |
+| `stale`    | Schema-version hash diverged (e.g., `mse_search_fields` config changed since the last rebuild). | Fall back to Phase 1, surface admin notice. |
+
+Transitions:
+
+- `wp mse-search-index rebuild` flips `empty` → `building` at start, `building` → `ready` on successful completion. If it crashes mid-rebuild, the state stays `building` and the next read falls back to Phase 1 — no partial-results window.
+- A re-run of `rebuild` from a `building` state resumes from the stored `last_id` (the rebuild loop is idempotent — see §6 below).
+- Schema-version mismatch (`mse_search_fields` config hash diverges, or plugin upgrade bumped the schema) flips `ready` → `stale`. The next successful rebuild flips it back to `ready`.
+- `wp mse-search-index drop` returns the state to `empty` and truncates the table.
+
+Optional v2 upgrade: shadow-table swap. Rebuild writes into `mse_search_index_new`, then atomically renames `mse_search_index → mse_search_index_old` and `mse_search_index_new → mse_search_index`. This eliminates the read-path-fallback window entirely. Deferred from v1 because the state-flag approach is simpler and the fallback window is an acceptable degradation, not a correctness bug.
+
 ### Post-install behavior
 
-When `MSE_LARGE_LIBRARY_MODE` is first defined and the table exists but is empty (or stale, per `mse_search_index_version` mismatch), the read path should **fall back to the Phase 1 LIKE query** rather than return zero results. This keeps the site functional until rebuild completes.
+When `MSE_LARGE_LIBRARY_MODE` is first defined the schema migration runs and the state is `empty`. The read path falls back to the Phase 1 LIKE query, surfaces the admin notice from §6's "Visibility of fallback mode" subsection, and waits for `wp mse-search-index rebuild`. The site is functional throughout — fallback semantics are exactly Phase 1.
 
 **Visibility of fallback mode is mandatory.** The fallback path is correct for keeping the site working, but it is also a silent performance cliff if the operator forgets to rebuild. Required behavior:
 
@@ -330,15 +366,20 @@ Trade-off accepted: `edited_term` on a popular term triggers many upserts. Queue
 
 ## 9. Compatibility floor
 
-| Requirement | Minimum | Reason |
+| Requirement | Minimum | Notes |
 |---|---|---|
-| MySQL | 5.7 | InnoDB FULLTEXT shipped in 5.6; `WITH PARSER ngram` in 5.7. WordPress itself requires 5.7.21+ from WP 6.6 onward, so this is not a practical regression. |
-| MariaDB | 10.0.5 | InnoDB FULLTEXT support. |
+| MySQL | 5.7 | InnoDB FULLTEXT shipped in 5.6; `WITH PARSER ngram` in 5.7. The schema migration emits `WITH PARSER ngram` only on MySQL. |
+| MariaDB | 10.0.5 | InnoDB FULLTEXT supported, but **MariaDB does not ship the InnoDB ngram parser** at any version. The schema migration omits `WITH PARSER ngram` on MariaDB; the FULLTEXT index uses the default parser. CJK and 2-character Latin tokens degrade — the activation notice should warn CJK-heavy MariaDB sites that Phase 3 results may be incomplete and recommend staying on Phase 1 for those workloads. |
 | WordPress | matches plugin's existing floor (currently "Requires at least: 3.5" but WP 5.9+ in practice for media modal features) | No new floor required for Phase 3 read/write code. |
 | PHP | matches plugin's existing CI matrix (7.4 - 8.3) | No new PHP requirements. |
 | Action Scheduler | optional, used only if site opts into admin-initiated rebuild | Soft dependency, fall back to WP-CLI. |
 
-**Do not ship Phase 3 if the server reports `ENGINE=MyISAM` for InnoDB or pre-5.6 MySQL.** The activation check for `MSE_LARGE_LIBRARY_MODE` should verify via `SHOW ENGINES` and `SELECT VERSION()` and admin-notice the operator if the server is too old.
+**Activation guard.** On `MSE_LARGE_LIBRARY_MODE` first-load the plugin must verify via `SHOW ENGINES` and `SELECT VERSION()`:
+
+- InnoDB present and is the default engine → continue.
+- MySQL 5.7+ → emit schema with `WITH PARSER ngram`.
+- MariaDB any version → emit schema without parser clause, raise a CJK-degradation admin notice.
+- Pre-5.6 MySQL or no InnoDB → refuse to activate large-library mode; admin notice with upgrade guidance; fallback to Phase 1 stays in effect.
 
 ---
 
@@ -348,7 +389,7 @@ The design above splits cleanly into these issues. Each should be small enough t
 
 1. **Schema + migration: `mse_search_index` table.** Add `includes/class-mse-search-index.php` with `create_table()` (dbDelta-compatible), schema version constant, drop/recreate helper. No hooks yet.
 2. **Write path: attachment + meta + taxonomy hooks.** Wire `add_attachment`, `attachment_updated`, `delete_attachment`, `updated_post_meta` (filtered to attachment + tracked keys), `set_object_terms`, `edited_term` to `upsert()` / `delete()`. Handle the fan-out case for `edited_term` via Action Scheduler or chunked `wp_schedule_single_event`.
-3. **Read path: `posts_clauses` short-circuit.** When `MSE_LARGE_LIBRARY_MODE` is on and the index is ready (version matches, row count > 0), query the index and inject `ID IN (...)`. Fall back to Phase 1 query path when off, empty, or version-mismatched. Preserves the existing private-post visibility `str_replace`.
+3. **Read path: `posts_clauses` short-circuit.** When `MSE_LARGE_LIBRARY_MODE` is on **and `mse_search_index_state === 'ready'`** (per §6's state machine — never an inferred check from row count), query the index and inject `ID IN (...)`. Fall back to Phase 1 query path for any other state (`empty`, `building`, `stale`) and for searches whose smallest token is shorter than 2 characters. Preserves the existing private-post visibility `str_replace`. Includes the denormalized filter clauses (`post_status` / `post_mime_type` / `post_date` / `post_parent`) inside the index query so `LIMIT 1000` is correctness-preserving.
 4. **WP-CLI rebuild.** `wp mse-search-index rebuild|status|drop` using the progress-row pattern in section 6. Chunked, crash-safe, idempotent.
 5. **Feature flag + docs.** `MSE_LARGE_LIBRARY_MODE` constant, admin notice when on-but-empty, README section with enable / rebuild / rollback runbook. Document the `mse_search_fields` semantic shift (write-time vs query-time).
 6. **Benchmark harness.** Extend `tests/benchmark/LargeScaleProfilingTest.php` with a companion scenario that seeds the index and measures index-path vs LIKE-path at 5k, 20k, 100k attachments. Log MATCH vs LIKE EXPLAIN side by side.
@@ -365,16 +406,21 @@ One optional follow-up:
 These must be resolved before the first Phase 3 PR lands.
 
 - **Multisite (maintainer decision gate).** The sketched schema is redundant: it uses `$wpdb->prefix` (per-blog) **and** a `blog_id` column. Only one of these can be the answer. Per-blog tables with `$wpdb->prefix` are idiomatic WordPress and make per-site uninstall / export trivial; one global table with `blog_id` is cheaper for operators running many small sites and centralises the rebuild. This choice gates the schema, the rebuild command's iteration model, and the uninstall story. **Pick one before follow-up issue #1 opens.** Recommendation leans toward per-blog via `$wpdb->prefix` and dropping the `blog_id` column, since single-site is the overwhelmingly common case and multisite operators already expect per-blog tables. The `MSE_LARGE_LIBRARY_MODE` constant scope and the WP-CLI rebuild signature for multisite are no longer open — see §7 and §6 respectively.
-- **WPML vs Polylang.** Both set a post language. Do we write one row per (attachment, language) — which bloats the table by the language count — or one row that includes all language variants? Current sketch assumes WPML-style duplication (one row per translated post), since WPML itself treats translations as separate posts with different IDs. Polylang may need different handling.
-- **GDPR / uninstall.** `uninstall.php` currently does nothing. Phase 3 adds: `DROP TABLE {$prefix}mse_search_index; delete_option('mse_search_index_version'); delete_option('mse_search_index_rebuild_state');`. Multisite uninstall must iterate sites.
+- **GDPR / uninstall.** `uninstall.php` currently does nothing. Phase 3 adds: `DROP TABLE {$prefix}mse_search_index; delete_option('mse_search_index_version'); delete_option('mse_search_index_state'); delete_option('mse_search_index_rebuild_state');`. Multisite uninstall must iterate sites.
 - **`wp_delete_attachment` during backfill.** The hook already fires in parallel with the rebuild loop. Our `upsert` is idempotent and `get_post` returns null for deleted posts, so the race is self-healing — but worth a test.
-- **Term rename fan-out.** Renaming a popular taxonomy term (e.g., 10k attachments) triggers 10k upserts. Without Action Scheduler, this is a 10k-row loop during the admin term-edit request. **Mitigation:** queue via single-event cron; show an admin notice "Reindexing in progress."
-- **Schema version bumps.** Adding a column to `searchable` (e.g., including captions per a future `mse_search_fields` change) invalidates every existing row. Need a stored `mse_search_index_version` in `wp_options` and a "stale — rebuild required" state, not silent corruption.
-- **Stopwords and short terms.** Even with the `searchable_short` LIKE fallback, a site searching for `"the"` (a stopword) will get zero matches from FULLTEXT and a full-table scan on `searchable_short`. Document as "avoid stopwords; use more specific terms."
-- **FULLTEXT relevance ordering.** `ORDER BY MATCH(searchable) AGAINST (?)` gives relevance-ranked results, but the current plugin orders by `post_date DESC`. Large-library mode should preserve `post_date DESC` ordering in the outer `posts_clauses` WHERE — relevance ranking is a separate feature, not a Phase-3 scope creep.
-- **Admin filtering (MIME/date/parent).** Verified in section 5: option (a) preserves core's filters, because we only inject `ID IN (...)` into the existing WHERE. Worth an explicit test in follow-up issue #3.
-- **`mse_search_fields` semantic shift.** We are redefining the filter's behavior *only when large-library mode is on*. The Phase 1 query-time filter keeps working in the fallback path. This needs very clear docs: "In large-library mode, `mse_search_fields` runs at write time; toggling it requires `wp mse-search-index rebuild`." Failure to communicate this will cause silent "why is my filter not working" bug reports.
+- **Term rename fan-out.** Renaming a popular taxonomy term (e.g., 10k attachments) triggers 10k upserts. Specified mitigation: see §4 — queue via Action Scheduler / `wp_schedule_single_event` when `wp_term_taxonomy.count >= 100`.
+- **Schema version bumps.** Adding a column to the schema (or changing how `searchable` is composed) invalidates every existing row. Tracked via `mse_search_index_version` in `wp_options`; on mismatch the state machine flips `ready → stale` and the read path falls back until rebuild.
+- **Stopwords.** A site searching for `"the"` (a default InnoDB stopword) gets zero matches from FULLTEXT. There is no separate fallback column anymore (see §3 — `searchable_short` was dropped); these queries return zero from the index and fall back semantics are not triggered for stopwords specifically because the search itself is non-empty. Document as "avoid stopwords; use more specific terms," and consider exposing a filter to seed `innodb_ft_server_stopword_table` with an empty list for sites that want stopwords searchable.
+- **FULLTEXT relevance ordering.** `ORDER BY MATCH(searchable) AGAINST (?)` gives relevance-ranked results, but the current plugin orders by `post_date DESC`. The §5 query already preserves `post_date DESC`. Relevance ranking is a separate feature, not Phase-3 scope creep.
+- **`mse_search_fields` semantic shift.** We are redefining the filter's behavior *only when large-library mode is on*. The Phase 1 query-time filter keeps working in the fallback path. The schema-version hash + state machine catches changes (`ready → stale`); the docs must still call this out: "In large-library mode, `mse_search_fields` runs at write time; toggling it requires `wp mse-search-index rebuild`." Failure to communicate this will cause silent "why is my filter not working" bug reports.
 - **The attachment ID exact-match contract.** Current plugin treats numeric search as exact `ID = N`. FULLTEXT on `searchable` containing the ID as a token would make `"42"` match any attachment whose description says "42 photos". The read path must preserve the existing numeric-is-exact-ID contract — treat the integer test as a pre-FULLTEXT shortcut that returns `[$id]` if the post exists and is an attachment.
+
+### Resolved during review (kept here as a paper trail)
+
+- ~~WPML vs Polylang one-row-per-language~~ — answered in §2 / §4: `PRIMARY KEY (attachment_id, language_code)`, language code derived from the post itself (not the request) at write time. WPML stores translations as separate posts so each gets its own row; Polylang stores one post per language so we still write one row per attachment with that post's language.
+- ~~`searchable_short` BTREE-prefix LIKE fallback for short tokens~~ — removed in §3 (the BTREE doesn't help `LIKE '%x%'`, and restricting it to title + filename silently dropped alt / taxonomy / caption matches). Replaced with: ngram parser handles 2+ characters natively, 1-character queries fall back to Phase 1.
+- ~~`LIMIT 1000` correctness~~ — fixed in §2 / §5 by denormalizing `post_mime_type` / `post_date` / `post_parent` / `post_status` / `post_author` into the index so filters apply before the LIMIT.
+- ~~"index is ready" defined as version-match + row-count~~ — replaced in §6 with an explicit `empty | building | ready | stale` state machine. Read path requires `ready`.
 
 ---
 
