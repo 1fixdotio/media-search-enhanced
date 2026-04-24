@@ -196,6 +196,45 @@ class QueryStructureTest extends WP_UnitTestCase {
 		$this->assertGreaterThanOrEqual( 4, $exists_count, 'Multi-term search should have EXISTS subqueries for each term (at least 2 per term).' );
 	}
 
+	public function test_search_fields_filter_removes_guid_and_taxonomy_clauses() {
+		$filter = function( $fields ) {
+			$fields['guid']     = false;
+			$fields['taxonomy'] = false;
+			return $fields;
+		};
+
+		add_filter( 'mse_search_fields', $filter );
+
+		try {
+			$result = $this->capture_query( 'benchmark-attachment' );
+		} finally {
+			remove_filter( 'mse_search_fields', $filter );
+		}
+
+		$this->assertNotEmpty( $result['sql'], 'Should have captured the search SQL.' );
+		$this->assertStringNotContainsString( '.guid LIKE', $result['sql'], 'GUID clause should be omitted when guid search is disabled.' );
+		$this->assertStringNotContainsString( 'term_relationships AS tr', $result['sql'], 'Taxonomy EXISTS clause should be omitted when taxonomy search is disabled.' );
+		$this->assertStringContainsString( 'post_title LIKE', $result['sql'], 'Other enabled fields should remain in the query.' );
+	}
+
+	public function test_search_fields_filter_removes_id_clause() {
+		$filter = function() {
+			return array( 'id' => false );
+		};
+
+		add_filter( 'mse_search_fields', $filter );
+
+		try {
+			$result = $this->capture_query( '12345' );
+		} finally {
+			remove_filter( 'mse_search_fields', $filter );
+		}
+
+		$this->assertNotEmpty( $result['sql'], 'Should have captured the search SQL.' );
+		$this->assertDoesNotMatchRegularExpression( '/\.ID\s*=\s*\'?12345/i', $result['sql'], 'Exact ID clause should be omitted when ID search is disabled.' );
+		$this->assertStringContainsString( 'post_title LIKE', $result['sql'], 'Other enabled fields should remain in the query when ID search is disabled.' );
+	}
+
 	/**
 	 * Log EXPLAIN output and timing for manual review.
 	 * No assertions — optimizer output varies across MySQL/MariaDB versions.

@@ -196,6 +196,83 @@ class SearchTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Test 7b: Search fields can disable GUID matching without affecting title.
+	 */
+	public function test_search_fields_filter_can_disable_guid_matches() {
+		$guid_only_id = $this->create_attachment( array(
+			'post_title' => 'guid-filter-control-title',
+			'guid'       => 'http://example.org/wp-content/uploads/guid-filter-only-match.jpg',
+		) );
+		$title_id = $this->create_attachment( array(
+			'post_title' => 'guid-filter-title-match',
+			'guid'       => 'http://example.org/wp-content/uploads/unrelated-guid-value.jpg',
+		) );
+
+		$filter = function() {
+			return array( 'guid' => false );
+		};
+
+		add_filter( 'mse_search_fields', $filter );
+
+		try {
+			$guid_results  = $this->search_attachments( 'guid-filter-only-match' );
+			$title_results = $this->search_attachments( 'guid-filter-title-match' );
+		} finally {
+			remove_filter( 'mse_search_fields', $filter );
+		}
+
+		$this->assertNotContains( $guid_only_id, $guid_results, 'GUID-only matches should be skipped when guid search is disabled.' );
+		$this->assertContains( $title_id, $title_results, 'Other enabled fields should keep working when guid search is disabled.' );
+	}
+
+	/**
+	 * Test 7c: Search fields filter receives query and terms context.
+	 */
+	public function test_search_fields_filter_receives_query_context() {
+		$received_query = null;
+		$received_terms = null;
+
+		$filter = function( $fields, $query = null, $terms = null ) use ( &$received_query, &$received_terms ) {
+			$received_query = $query;
+			$received_terms = $terms;
+			return $fields;
+		};
+
+		add_filter( 'mse_search_fields', $filter, 10, 3 );
+
+		try {
+			$this->search_attachments( 'context-check-term' );
+		} finally {
+			remove_filter( 'mse_search_fields', $filter, 10 );
+		}
+
+		$this->assertInstanceOf( 'WP_Query', $received_query, 'Search field filters should receive the active WP_Query instance.' );
+		$this->assertSame( array( 'context-check-term' ), $received_terms, 'Search field filters should receive the parsed search terms.' );
+	}
+
+	/**
+	 * Test 7d: Disabling all search fields returns no results.
+	 */
+	public function test_search_fields_filter_can_disable_all_fields() {
+		$id = $this->create_attachment( array( 'post_title' => 'all-fields-disabled-test' ) );
+
+		$filter = function( $fields ) {
+			return array_fill_keys( array_keys( $fields ), false );
+		};
+
+		add_filter( 'mse_search_fields', $filter );
+
+		try {
+			$results = $this->search_attachments( 'all-fields-disabled-test' );
+		} finally {
+			remove_filter( 'mse_search_fields', $filter );
+		}
+
+		$this->assertNotContains( $id, $results, 'No results should be returned when every search field is disabled.' );
+		$this->assertEmpty( $results, 'Disabling every search field should force the search to return no results.' );
+	}
+
+	/**
 	 * Test 8: Search by taxonomy term name and slug.
 	 */
 	public function test_search_by_taxonomy_term() {
@@ -206,7 +283,8 @@ class SearchTest extends WP_UnitTestCase {
 
 		$id   = $this->create_attachment( array( 'post_title' => 'taxonomy-test-image' ) );
 		$term = wp_insert_term( 'Corporate Events', 'media_category', array(
-			'slug' => 'corporate-events',
+			'slug'        => 'corporate-events',
+			'description' => 'Quarterly leadership summit',
 		) );
 		wp_set_object_terms( $id, $term['term_id'], 'media_category' );
 
@@ -217,6 +295,10 @@ class SearchTest extends WP_UnitTestCase {
 		// Search by term slug.
 		$results = $this->search_attachments( 'corporate-events' );
 		$this->assertContains( $id, $results, 'Should find attachment by taxonomy term slug.' );
+
+		// Search by term description.
+		$results = $this->search_attachments( 'Quarterly leadership summit' );
+		$this->assertContains( $id, $results, 'Should find attachment by taxonomy term description.' );
 	}
 
 	/**
@@ -379,7 +461,6 @@ class SearchTest extends WP_UnitTestCase {
 		$id = $this->create_attachment( array( 'post_title' => 'ajax-fallback-test' ) );
 
 		// Simulate the AJAX media modal request.
-		add_filter( 'mse_allow_multi_term_search', '__return_true' );
 		$_REQUEST['query']  = array(
 			's'         => 'ajax-fallback-test',
 			'post_type' => 'attachment',
@@ -437,7 +518,12 @@ class SearchTest extends WP_UnitTestCase {
 		) );
 
 		wp_set_current_user( $author_a );
-		$results = $this->search_attachments( 'private' );
+
+		try {
+			$results = $this->search_attachments( 'private' );
+		} finally {
+			wp_set_current_user( 0 );
+		}
 
 		$this->assertContains( $own_private, $results, 'Author should find their own private attachment.' );
 		$this->assertNotContains( $other_private, $results, 'Author should not find another author\'s private attachment.' );
