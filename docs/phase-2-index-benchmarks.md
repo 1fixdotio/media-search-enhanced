@@ -211,7 +211,7 @@ This is the snippet the maintainer could drop into `README.md` if future
 data changes the conclusion. **Do not merge this into `README.md` now** —
 the current data does not support it.
 
-```markdown
+~~~markdown
 ### Optional: composite index on `wp_postmeta` (advanced)
 
 On very large libraries (hundreds of thousands of attachments), a DBA may
@@ -227,7 +227,7 @@ This is **not recommended by default**. At 5k and 20k attachments on MySQL
 8.0 we observed no measurable improvement; the existing `wp_postmeta.post_id`
 index already handles the correlated lookup. Evaluate with
 `bin/profile.sh` against your own data before deploying.
-```
+~~~
 
 ## Follow-ups out of scope for this doc
 
