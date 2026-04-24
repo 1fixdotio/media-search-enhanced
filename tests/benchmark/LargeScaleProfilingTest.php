@@ -129,7 +129,7 @@ class LargeScaleProfilingTest extends WP_UnitTestCase {
 		$search_needle = trim( explode( ',', $search )[0] );
 		$captured_sql  = '';
 		foreach ( $wpdb->queries as $q ) {
-			if ( stripos( $q[0], $search_needle ) !== false && stripos( $q[0], 'SELECT' ) !== false ) {
+			if ( stripos( $q[0], $search_needle ) !== false && stripos( $q[0], $wpdb->posts ) !== false ) {
 				$captured_sql = $q[0];
 				break;
 			}
@@ -354,7 +354,7 @@ class LargeScaleProfilingTest extends WP_UnitTestCase {
 		$search_needle = trim( explode( ',', $search )[0] );
 		$captured_sql  = '';
 		foreach ( $wpdb->queries as $q ) {
-			if ( stripos( $q[0], $search_needle ) !== false && stripos( $q[0], 'SELECT' ) !== false ) {
+			if ( stripos( $q[0], $search_needle ) !== false && stripos( $q[0], $wpdb->posts ) !== false ) {
 				$captured_sql = $q[0];
 				break;
 			}
