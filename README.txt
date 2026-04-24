@@ -74,7 +74,7 @@ Use the `mse_search_fields` filter to disable expensive search clauses you do no
 
 Supported keys are `id`, `title`, `guid`, `description`, `caption`, `alt_text`, `filename`, and `taxonomy`.
 
-Return strict booleans for the keys you change. Unspecified keys keep their default values. If you disable every search field, the query will return no results.
+Return truthy or falsy values for the keys you change. Unspecified keys keep their default values. If you disable every search field, the query will return no results.
 
 == Screenshots ==
 
