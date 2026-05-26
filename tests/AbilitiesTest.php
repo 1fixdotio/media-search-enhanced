@@ -79,11 +79,15 @@ class AbilitiesTest extends WP_UnitTestCase {
 
 	/**
 	 * Permission callback rejects users without upload_files.
+	 *
+	 * The Abilities API contract is to return a boolean — returning WP_Error
+	 * triggers _doing_it_wrong() and the framework substitutes its own
+	 * generic error, discarding any custom message.
 	 */
 	public function test_permission_rejects_unauthenticated_user() {
 		wp_set_current_user( 0 );
 		$result = MSE_Abilities::check_permission( array() );
-		$this->assertInstanceOf( 'WP_Error', $result, 'Anonymous users should be rejected.' );
+		$this->assertFalse( $result, 'Anonymous users should be rejected (false, not WP_Error).' );
 	}
 
 	/**
@@ -93,6 +97,17 @@ class AbilitiesTest extends WP_UnitTestCase {
 		// set_up() already created an editor user with upload_files.
 		$result = MSE_Abilities::check_permission( array() );
 		$this->assertTrue( $result, 'Editors (upload_files capability) should be allowed.' );
+	}
+
+	/**
+	 * The query schema rejects whitespace-only inputs via its pattern,
+	 * preventing wildcard-like searches that would match nearly every
+	 * attachment containing any whitespace.
+	 */
+	public function test_whitespace_only_query_is_rejected_by_schema() {
+		$ability = wp_get_ability( self::ABILITY_NAME );
+		$result  = $ability->execute( array( 'query' => '   ' ) );
+		$this->assertInstanceOf( 'WP_Error', $result, 'A whitespace-only query should fail input validation.' );
 	}
 
 	/**

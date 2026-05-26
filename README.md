@@ -39,7 +39,22 @@ $results = $ability->execute( array(
 ) );
 ```
 
-Or via REST: `GET /wp-json/wp-abilities/v1/media-search-enhanced/search-media` (see the Abilities API docs for the exact request shape).
+Or via REST:
+
+```http
+POST /wp-json/wp-abilities/v1/abilities/media-search-enhanced/search-media/run
+Content-Type: application/json
+
+{
+  "input": {
+    "query": "mountain, sunset",
+    "mime_type": "image/jpeg",
+    "per_page": 20
+  }
+}
+```
+
+The ability is registered with the `readonly` annotation, so the same route also accepts `GET` with the input passed as query parameters (e.g. `?query=mountain`).
 
 On WordPress versions older than 6.9, the ability is not registered; the plugin's filter-level integration continues to work unchanged.
 

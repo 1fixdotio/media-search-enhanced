@@ -20,7 +20,7 @@ class MSE_Abilities {
 	const ABILITY_NAME  = 'media-search-enhanced/search-media';
 	const CATEGORY_NAME = 'media-search-enhanced';
 	const MAX_PER_PAGE  = 100;
-	const MAX_QUERY_LEN = 200;
+	const MAX_QUERY_LEN = 600;
 
 	/**
 	 * Hook category and ability registration into the Abilities API init actions.
@@ -59,6 +59,11 @@ class MSE_Abilities {
 				'output_schema'       => self::output_schema(),
 				'meta'                => array(
 					'show_in_rest' => true,
+					'annotations'  => array(
+						// Read-only ability — REST controller allows GET in
+						// addition to POST when this annotation is set.
+						'readonly' => true,
+					),
 				),
 			)
 		);
@@ -67,16 +72,13 @@ class MSE_Abilities {
 	/**
 	 * Permission callback. Requires the upload_files capability — the same
 	 * gate WordPress uses for Media Library access.
+	 *
+	 * The Abilities API contract is: return a bool. Returning WP_Error here
+	 * triggers _doing_it_wrong() in WP_Ability::execute() and the framework
+	 * substitutes its own generic ability_invalid_permissions error.
 	 */
 	public static function check_permission( $input = array() ) {
-		if ( ! current_user_can( 'upload_files' ) ) {
-			return new WP_Error(
-				'rest_forbidden',
-				__( 'You do not have permission to search the media library.', 'media-search-enhanced' ),
-				array( 'status' => 403 )
-			);
-		}
-		return true;
+		return current_user_can( 'upload_files' );
 	}
 
 	/**
@@ -88,29 +90,36 @@ class MSE_Abilities {
 			'properties' => array(
 				'query'       => array(
 					'type'        => 'string',
-					'description' => 'Search term. Comma-separated values are treated as multiple terms and OR-ed together (up to 10 terms).',
+					'description' => 'Search term. Comma-separated values are treated as multiple terms and OR-ed together (up to 10 terms). Must contain at least one non-whitespace character.',
 					'minLength'   => 1,
 					'maxLength'   => self::MAX_QUERY_LEN,
+					'pattern'     => '\\S',
 				),
 				'mime_type'   => array(
-					'description' => 'Filter by attachment MIME type, e.g. "image/jpeg" or "application/pdf". Accepts a single value or an array of values.',
+					'description' => 'Filter by attachment MIME type, e.g. "image/jpeg" or "application/pdf". Accepts a single value or an array of values. Each array element must be a single MIME type — do not embed commas.',
 					'oneOf'       => array(
-						array( 'type' => 'string' ),
+						array(
+							'type'    => 'string',
+							'pattern' => '^[^,]+$',
+						),
 						array(
 							'type'  => 'array',
-							'items' => array( 'type' => 'string' ),
+							'items' => array(
+								'type'    => 'string',
+								'pattern' => '^[^,]+$',
+							),
 						),
 					),
 				),
 				'after'       => array(
 					'type'        => 'string',
 					'format'      => 'date-time',
-					'description' => 'Return attachments uploaded on or after this ISO 8601 datetime. Interpreted in the site timezone if no offset is provided. Inclusive.',
+					'description' => 'Return attachments uploaded on or after this RFC 3339 datetime (e.g. "2025-01-15T00:00:00Z"). Interpreted as UTC and compared against post_date_gmt. Inclusive.',
 				),
 				'before'      => array(
 					'type'        => 'string',
 					'format'      => 'date-time',
-					'description' => 'Return attachments uploaded on or before this ISO 8601 datetime. Interpreted in the site timezone if no offset is provided. Inclusive.',
+					'description' => 'Return attachments uploaded on or before this RFC 3339 datetime (e.g. "2025-01-15T23:59:59Z"). Interpreted as UTC and compared against post_date_gmt. Inclusive.',
 				),
 				'author'      => array(
 					'type'        => 'integer',
@@ -167,9 +176,9 @@ class MSE_Abilities {
 						'description' => 'Base filename of the attached file.',
 					),
 					'url'        => array(
-						'type'        => 'string',
+						'type'        => array( 'string', 'null' ),
 						'format'      => 'uri',
-						'description' => 'Public URL of the attachment.',
+						'description' => 'Public URL of the attachment, or null if no URL is available (missing file, or filtered out).',
 					),
 					'mime_type'  => array(
 						'type'        => 'string',
@@ -177,7 +186,7 @@ class MSE_Abilities {
 					),
 					'dimensions' => array(
 						'type'        => array( 'object', 'null' ),
-						'description' => 'Image dimensions in pixels, or null for non-image media.',
+						'description' => 'Image dimensions in pixels. Null for non-image media or for images whose stored metadata does not include width and height.',
 						'properties'  => array(
 							'width'  => array( 'type' => 'integer' ),
 							'height' => array( 'type' => 'integer' ),
@@ -216,6 +225,10 @@ class MSE_Abilities {
 			's'              => $input['query'],
 			'posts_per_page' => isset( $input['per_page'] ) ? (int) $input['per_page'] : 10,
 			'paged'          => isset( $input['page'] ) ? (int) $input['page'] : 1,
+			// Output schema has no total/total_pages envelope, so suppress
+			// SQL_CALC_FOUND_ROWS — every call would otherwise pay for a
+			// count it never returns.
+			'no_found_rows'  => true,
 		);
 
 		if ( ! empty( $input['mime_type'] ) ) {
@@ -223,7 +236,12 @@ class MSE_Abilities {
 		}
 
 		if ( ! empty( $input['after'] ) || ! empty( $input['before'] ) ) {
-			$date_query = array( 'inclusive' => true );
+			// post_date_gmt matches the semantics of /wp/v2/media?after=/before=
+			// and the RFC 3339 (UTC) values the schema documents.
+			$date_query = array(
+				'inclusive' => true,
+				'column'    => 'post_date_gmt',
+			);
 			if ( ! empty( $input['after'] ) ) {
 				$date_query['after'] = $input['after'];
 			}
@@ -244,13 +262,15 @@ class MSE_Abilities {
 		$enable_multi_term = static function () {
 			return true;
 		};
-		add_filter( 'mse_allow_multi_term_search', $enable_multi_term );
+		// Use PHP_INT_MAX so a site's global mse_allow_multi_term_search
+		// override cannot suppress the ability's intended multi-term unlock.
+		add_filter( 'mse_allow_multi_term_search', $enable_multi_term, PHP_INT_MAX );
 
 		try {
 			$query = new WP_Query( $args );
 			return array_map( array( __CLASS__, 'format_attachment' ), $query->posts );
 		} finally {
-			remove_filter( 'mse_allow_multi_term_search', $enable_multi_term );
+			remove_filter( 'mse_allow_multi_term_search', $enable_multi_term, PHP_INT_MAX );
 		}
 	}
 
@@ -274,6 +294,8 @@ class MSE_Abilities {
 		$file     = get_attached_file( $id );
 		$filename = $file ? wp_basename( $file ) : '';
 
+		$url = wp_get_attachment_url( $id );
+
 		$taxonomies = array();
 		foreach ( get_object_taxonomies( 'attachment' ) as $tax ) {
 			$terms = wp_get_post_terms( $id, $tax, array( 'fields' => 'names' ) );
@@ -284,10 +306,13 @@ class MSE_Abilities {
 
 		return array(
 			'id'         => (int) $id,
-			'title'      => (string) get_the_title( $id ),
+			// Use the raw post_title — get_the_title() runs `the_title` filters
+			// (wptexturize, entity encoding) producing &#8220;quoted&#8221;
+			// titles that downstream consumers would have to decode.
+			'title'      => (string) $post->post_title,
 			'alt'        => (string) get_post_meta( $id, '_wp_attachment_image_alt', true ),
 			'filename'   => $filename,
-			'url'        => (string) wp_get_attachment_url( $id ),
+			'url'        => $url ? (string) $url : null,
 			'mime_type'  => (string) get_post_mime_type( $id ),
 			'dimensions' => $dimensions,
 			'parent'     => $post->post_parent ? (int) $post->post_parent : null,
