@@ -10,6 +10,54 @@ Boots WordPress in your browser with the plugin pre-installed and a seeded Media
 
 For WordPress.org plugin details, see [README.txt](README.txt).
 
+## REST API
+
+The plugin's expanded search applies automatically to `GET /wp/v2/media?search=…`. Any REST client — including the block editor's media modal, third-party plugins, and external tools — gets matches across alt text, filename, GUID, taxonomy terms, description, and caption without extra configuration.
+
+The multi-term comma syntax is the one exception: it's gated to authenticated admin context by default to avoid frontend query amplification. Site owners can opt in elsewhere with the `mse_allow_multi_term_search` filter.
+
+## Abilities API integration (WordPress 6.9+)
+
+When running on WordPress 6.9 or later, the plugin registers a single ability via the [WordPress Abilities API](https://make.wordpress.org/core/2025/11/10/abilities-api-in-wordpress-6-9/):
+
+- **`media-search-enhanced/search-media`** — a schema'd, discoverable surface for the same expanded search the plugin already provides. Useful for AI agents (via the MCP adapter) and automation tools that need a labeled, validated entry point.
+
+What the ability adds beyond plain core REST:
+
+- A discoverable, self-documenting handle with input/output JSON Schemas
+- The multi-term comma syntax is unlocked behind the ability's `upload_files` permission check, scoped to the single invocation (no global filter side effects)
+- Structured filter parameters (`mime_type`, `after`, `before`, `author`, `post_parent`, `per_page`, `page`) with explicit bounds
+
+Invocation:
+
+```php
+$ability = wp_get_ability( 'media-search-enhanced/search-media' );
+$results = $ability->execute( array(
+    'query'     => 'mountain, sunset',
+    'mime_type' => 'image/jpeg',
+    'per_page'  => 20,
+) );
+```
+
+Or via REST:
+
+```http
+POST /wp-json/wp-abilities/v1/abilities/media-search-enhanced/search-media/run
+Content-Type: application/json
+
+{
+  "input": {
+    "query": "mountain, sunset",
+    "mime_type": "image/jpeg",
+    "per_page": 20
+  }
+}
+```
+
+The ability is registered with the `readonly` annotation, so the same route also accepts `GET` with the input passed as query parameters (e.g. `?query=mountain`).
+
+On WordPress versions older than 6.9, the ability is not registered; the plugin's filter-level integration continues to work unchanged.
+
 ## Development
 
 ### Prerequisites

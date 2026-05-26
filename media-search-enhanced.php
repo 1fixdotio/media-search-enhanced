@@ -44,3 +44,10 @@ require_once( plugin_dir_path( __FILE__ ) . 'public/class-media-search-enhanced.
  */
 
 add_action( 'plugins_loaded', array( 'Media_Search_Enhanced', 'get_instance' ) );
+
+// Abilities API integration (WordPress 6.9+). The function_exists guard keeps
+// the plugin working on older WP releases that don't ship the Abilities API.
+if ( function_exists( 'wp_register_ability' ) ) {
+	require_once( plugin_dir_path( __FILE__ ) . 'public/class-mse-abilities.php' );
+	MSE_Abilities::init();
+}

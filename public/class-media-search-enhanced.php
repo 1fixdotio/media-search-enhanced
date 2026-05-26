@@ -209,8 +209,14 @@ class Media_Search_Enhanced {
 			);
 		}
 
-		// WPML compatibility.
-		if ( class_exists( 'WPML_Media' ) ) {
+		// WPML compatibility. The WHERE additions reference alias `t` on
+		// wp_icl_translations, which WPML_Media adds via its own posts_join
+		// filter only for the Media-AJAX context (query-attachments). Other
+		// entry points — notably the Abilities API path — run posts_clauses
+		// without that JOIN, so appending the WHERE there would generate
+		// "Unknown column 't.element_type'" errors. Only append when the
+		// JOIN is already in place.
+		if ( class_exists( 'WPML_Media' ) && false !== strpos( $pieces['join'], 'wp_icl_translations' ) ) {
 			global $sitepress;
 			$lang = $sitepress->get_current_language();
 			$pieces['where'] .= $wpdb->prepare( " AND t.element_type='post_attachment' AND t.language_code = %s", $lang );
