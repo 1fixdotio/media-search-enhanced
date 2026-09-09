@@ -5,7 +5,7 @@ Donate link: https://1fix.io/
 Tags: media library, media, attachment
 Requires at least: 3.5
 Tested up to: 6.8.3
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -67,6 +67,10 @@ Please add the following code to the `functions.php` in your theme:
 2. Demo search on the Insert Media - Media Library screen.
 
 == Changelog ==
+
+= 1.0.1 =
+* Fix: The `[mse-search-form]` shortcode returned no results on the frontend. Attachment searches that don't specify a post status now default to `inherit`; without it WordPress core restricts the query to public statuses, which no attachment has. Regression introduced in 1.0.0.
+* Note: Any query for attachments with a search term and no explicit post status now finds attachments where it previously matched nothing.
 
 = 1.0.0 =
 * New: Multi-term search — use commas to search for multiple items at once anywhere in wp-admin, including the Media Library list view and the "Add Media" modal (e.g. `sunset.jpg, logo.png`). Limited to 10 terms. Frontend searches still treat commas as literal characters.

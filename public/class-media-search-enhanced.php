@@ -28,7 +28,7 @@ class Media_Search_Enhanced {
 	 *
 	 * @var     string
 	 */
-	const VERSION = '1.0.0';
+	const VERSION = '1.0.1';
 
 	/**
 	 *
@@ -66,6 +66,7 @@ class Media_Search_Enhanced {
 		add_action( 'init', array( $this, 'load_plugin_textdomain' ) );
 
 		// Media Search filters
+		add_action( 'pre_get_posts', array( $this, 'set_attachment_search_status' ), 20 );
 		add_filter( 'posts_search', array( $this, 'suppress_core_search' ), 20, 2 );
 		add_filter( 'posts_clauses', array( $this, 'posts_clauses' ), 20, 2 );
 
@@ -142,6 +143,32 @@ class Media_Search_Enhanced {
 		return ! empty( $vars['s'] ) && is_string( $vars['s'] )
 			&& ( ( isset( $_REQUEST['action'] ) && 'query-attachments' == $_REQUEST['action'] )
 				|| ( isset( $vars['post_type'] ) && 'attachment' == $vars['post_type'] ) );
+	}
+
+	/**
+	 * Default the post status to 'inherit' for attachment searches that
+	 * don't specify one.
+	 *
+	 * When no post_status is given, core restricts the query to statuses
+	 * registered as public. Attachments carry 'inherit', which is internal,
+	 * so a frontend search (what the `[mse-search-form]` shortcode submits
+	 * as `?s=<term>&post_type=attachment`) matches nothing at all. The admin
+	 * never hits this because both the Media Library AJAX request and
+	 * wp_edit_attachments_query_vars() set post_status explicitly.
+	 *
+	 * 'private' is deliberately not added here: posts_clauses() widens the
+	 * status to include private attachments only for users allowed to see
+	 * them.
+	 *
+	 * @param WP_Query $query The query being prepared.
+	 * @return void
+	 *
+	 * @since 1.0.1
+	 */
+	public static function set_attachment_search_status( $query ) {
+		if ( self::is_mse_search( $query ) && ! $query->get( 'post_status' ) ) {
+			$query->set( 'post_status', 'inherit' );
+		}
 	}
 
 	/**

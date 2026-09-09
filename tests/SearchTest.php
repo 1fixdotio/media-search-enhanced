@@ -604,4 +604,120 @@ class SearchTest extends WP_UnitTestCase {
 			$this->assertNotContains( $ids[ $i ], $results, "Term '{$names[$i]}' (over cap) should not match." );
 		}
 	}
+
+	/**
+	 * Run an attachment search the way the frontend does: no explicit
+	 * post_status, exactly what `[mse-search-form]` submits
+	 * (`?s=<term>&post_type=attachment`).
+	 *
+	 * @param string $search     The search term.
+	 * @param array  $extra_args Additional WP_Query args.
+	 * @return int[] Array of post IDs.
+	 */
+	private function search_attachments_frontend( $search, $extra_args = array() ) {
+		$args = array_merge( array(
+			'post_type' => 'attachment',
+			's'         => $search,
+			'fields'    => 'ids',
+			'orderby'   => 'ID',
+			'order'     => 'ASC',
+		), $extra_args );
+
+		$query = new WP_Query( $args );
+
+		return $query->posts;
+	}
+
+	/**
+	 * Test 23: The frontend search form finds attachments.
+	 *
+	 * Regression guard for the shortcode search returning nothing: without an
+	 * explicit post_status, core restricts the query to public statuses, and
+	 * 'inherit', the status every attachment carries, is internal.
+	 */
+	public function test_frontend_search_finds_attachments() {
+		$id = $this->create_attachment( array( 'post_title' => 'frontend-mountain-photo' ) );
+
+		$results = $this->search_attachments_frontend( 'frontend-mountain-photo' );
+
+		$this->assertContains( $id, $results, 'A frontend search should find an unattached attachment.' );
+	}
+
+	/**
+	 * Test 24: The frontend search reaches the fields core cannot.
+	 */
+	public function test_frontend_search_matches_alt_text_and_filename() {
+		$by_alt = $this->create_attachment(
+			array( 'post_title' => 'Photo 22' ),
+			array( '_wp_attachment_image_alt' => 'snowy frontendterm peaks at dawn' )
+		);
+		$by_file = $this->create_attachment(
+			array( 'post_title' => 'Landscape 04' ),
+			array( '_wp_attached_file' => '2026/09/frontendterm-trail-alps.jpg' )
+		);
+
+		$results = $this->search_attachments_frontend( 'frontendterm' );
+
+		$this->assertContains( $by_alt, $results, 'A frontend search should match alt text.' );
+		$this->assertContains( $by_file, $results, 'A frontend search should match the filename.' );
+	}
+
+	/**
+	 * Test 25: Logged-out frontend visitors never see private attachments.
+	 *
+	 * Guards the disclosure fixed in #16 against the frontend status default.
+	 */
+	public function test_frontend_search_hides_private_attachments() {
+		$author  = self::factory()->user->create( array( 'role' => 'author' ) );
+		$private = $this->create_attachment( array(
+			'post_title'  => 'frontend-private-attachment',
+			'post_status' => 'private',
+			'post_author' => $author,
+		) );
+		$public = $this->create_attachment( array(
+			'post_title'  => 'frontend-public-attachment',
+			'post_status' => 'inherit',
+		) );
+
+		wp_set_current_user( 0 );
+		$results = $this->search_attachments_frontend( 'frontend-' );
+
+		$this->assertNotContains( $private, $results, 'Logged-out visitors must not see private attachments.' );
+		$this->assertContains( $public, $results, 'Logged-out visitors should still see public attachments.' );
+	}
+
+	/**
+	 * Test 26: A caller that sets post_status explicitly keeps it.
+	 */
+	public function test_explicit_post_status_is_not_overridden() {
+		$inherit = $this->create_attachment( array( 'post_title' => 'explicit-status-inherit' ) );
+		$private = $this->create_attachment( array(
+			'post_title'  => 'explicit-status-private',
+			'post_status' => 'private',
+		) );
+
+		$results = $this->search_attachments_frontend( 'explicit-status', array( 'post_status' => 'private' ) );
+
+		$this->assertContains( $private, $results, 'An explicit post_status should be respected.' );
+		$this->assertNotContains( $inherit, $results, 'An explicit post_status should not be widened to inherit.' );
+	}
+
+	/**
+	 * Test 27: The real frontend request finds attachments.
+	 *
+	 * Same as test 23 but routed through WP::parse_request(), which is the
+	 * URL `[mse-search-form]` actually submits.
+	 */
+	public function test_frontend_request_url_finds_attachments() {
+		$id = $this->create_attachment( array( 'post_title' => 'frontend-url-mountain' ) );
+
+		$this->go_to( '/?s=frontend-url-mountain&post_type=attachment' );
+
+		$this->assertTrue( is_search(), 'The request should be a search.' );
+		$this->assertContains(
+			$id,
+			wp_list_pluck( $GLOBALS['wp_query']->posts, 'ID' ),
+			'The main query for the shortcode URL should find the attachment.'
+		);
+	}
 }

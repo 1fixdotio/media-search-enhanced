@@ -14,7 +14,7 @@
  * Plugin Name:       Media Search Enhanced
  * Plugin URI:        https://1fix.io/media-search-enhanced
  * Description:       Search through all fields in Media Library.
- * Version:           1.0.0
+ * Version:           1.0.1
  * Author:            1fixdotio
  * Author URI:        https://1fix.io
  * Text Domain:       media-search-enhanced
