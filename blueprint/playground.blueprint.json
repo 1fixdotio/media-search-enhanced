@@ -12,7 +12,7 @@
       "step": "installPlugin",
       "pluginData": {
         "resource": "url",
-        "url": "https://github.com/1fixdotio/media-search-enhanced/releases/download/1.0.0/media-search-enhanced.zip"
+        "url": "https://github.com/1fixdotio/media-search-enhanced/releases/download/v1.0.1/media-search-enhanced.zip"
       },
       "options": { "activate": true }
     },

@@ -66,7 +66,7 @@ The script rewrites the `raw.githubusercontent.com/.../<ref>/blueprint/...` URLs
 
 ## Bumping the pinned release
 
-`pluginData` points at the release zip built by `.github/workflows/deploy.yml` (via `10up/action-wordpress-plugin-deploy`). Current pin: `1.0.0`. When you publish a new release, update the version segment in `playground.blueprint.json`:
+`pluginData` points at the release zip built by `.github/workflows/deploy.yml` (via `10up/action-wordpress-plugin-deploy`). Current pin: `v1.0.1`. When you publish a new release, update the version segment in `playground.blueprint.json`:
 
 ```json
 "pluginData": {
@@ -75,4 +75,4 @@ The script rewrites the `raw.githubusercontent.com/.../<ref>/blueprint/...` URLs
 }
 ```
 
-Replace `<NEW_VERSION>` with the release tag (e.g. `1.0.1`, `1.1.0`). Only the version segment changes — the zip is always named `media-search-enhanced.zip` and is attached to the release automatically by the deploy workflow.
+Replace `<NEW_VERSION>` with the release tag exactly as GitHub shows it, including any `v` prefix (tags so far: `1.0.0`, `v1.0.1`). Only the version segment changes — the zip is always named `media-search-enhanced.zip` and is attached to the release automatically by the deploy workflow.
