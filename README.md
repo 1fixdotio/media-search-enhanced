@@ -1,6 +1,6 @@
 # Media Search Enhanced
 
-A WordPress plugin that extends the Media Library search to cover all fields: ID, title, caption, alt text, description, filename, GUID, and taxonomy terms.
+A WordPress plugin that extends the Media Library search to cover all fields: ID, title, caption, alt text, description, filename, GUID, taxonomy terms, and photo keywords.
 
 ## Try it in your browser
 
@@ -46,7 +46,7 @@ When working on query changes (e.g., [#10](https://github.com/1fixdotio/media-se
 composer test
 ```
 
-The correctness tests in `tests/SearchTest.php` verify that search results are correct across all fields (title, alt text, filename, ID, GUID, taxonomy, etc.), all filters (MIME type, date, post parent), multi-term comma search, and private attachment visibility. These must pass before and after any refactoring.
+The correctness tests in `tests/SearchTest.php` verify that search results are correct across all fields (title, alt text, filename, ID, GUID, taxonomy, embedded photo keywords, etc.), all filters (MIME type, date, post parent), multi-term comma search, and private attachment visibility. These must pass before and after any refactoring.
 
 If a test fails after your change, a search field or filter is broken.
 
@@ -67,9 +67,11 @@ The benchmark tests in `tests/benchmark/QueryStructureTest.php` assert on the **
 
 If the structural tests pass, the query is shaped as intended.
 
+Note: the photo keyword search (`get_metadata_match_ids()`) runs one additional query on `postmeta` before the main query, because the keywords are stored in serialized PHP. The structure tests identify the main query as the one that selects `FROM {posts}`, so they do not assert on that lookup query. It can be disabled with the `mse_search_metadata` filter.
+
 ### Layer 3: EXPLAIN and timing (manual comparison)
 
-Run profiling **before and after** your changes to compare:
+Run profiling **before and after** your changes to compare (the reported query time includes the photo keyword lookup, while the SQL and EXPLAIN output are those of the main query):
 
 ```bash
 # 1. On the base branch, run profiling and save output

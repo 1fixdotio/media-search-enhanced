@@ -91,10 +91,11 @@ class LargeScaleProfilingTest extends WP_UnitTestCase {
 
 		$wp_query->query_vars = $original_vars;
 
-		// Find the main query SQL.
+		// Find the main query SQL. It selects FROM the posts table, unlike the
+		// photo keyword lookup query which also contains the search term.
 		$captured_sql = '';
 		foreach ( $wpdb->queries as $q ) {
-			if ( stripos( $q[0], $search ) !== false && stripos( $q[0], 'SELECT' ) !== false ) {
+			if ( stripos( $q[0], $search ) !== false && stripos( $q[0], "FROM $wpdb->posts" ) !== false ) {
 				$captured_sql = $q[0];
 				break;
 			}

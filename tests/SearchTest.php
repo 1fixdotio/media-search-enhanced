@@ -720,4 +720,70 @@ class SearchTest extends WP_UnitTestCase {
 			'The main query for the shortcode URL should find the attachment.'
 		);
 	}
+
+	/**
+	 * Test 28: Search by embedded photo keyword (IPTC/XMP).
+	 *
+	 * Keywords live in the serialized `image_meta` array of `_wp_attachment_metadata`.
+	 */
+	public function test_search_by_photo_keyword() {
+		$id = $this->create_attachment( array( 'post_title' => 'IMG_0001' ), array(
+			'_wp_attachment_metadata' => array(
+				'image_meta' => array( 'keywords' => array( 'amalfi coast', 'positano' ) ),
+			),
+		) );
+
+		$this->assertContains( $id, $this->search_attachments( 'positano' ) );
+		$this->assertContains( $id, $this->search_attachments( 'AMALFI' ), 'Keyword matching should be case-insensitive.' );
+	}
+
+	/**
+	 * Test 29: Other data in `_wp_attachment_metadata` is not searched.
+	 *
+	 * Only the keywords are matched; the camera name sits in the same serialized value
+	 * and must not produce a hit.
+	 */
+	public function test_photo_metadata_search_only_matches_keywords() {
+		$id = $this->create_attachment( array( 'post_title' => 'IMG_0002' ), array(
+			'_wp_attachment_metadata' => array(
+				'image_meta' => array(
+					'camera'   => 'FinePix X100',
+					'keywords' => array( 'harbour' ),
+				),
+			),
+		) );
+
+		$this->assertNotContains( $id, $this->search_attachments( 'FinePix' ) );
+	}
+
+	/**
+	 * Test 30: Keyword search can be disabled with `mse_search_metadata`.
+	 */
+	public function test_metadata_search_can_be_disabled() {
+		$id = $this->create_attachment( array( 'post_title' => 'IMG_0006' ), array(
+			'_wp_attachment_metadata' => array(
+				'image_meta' => array( 'keywords' => array( 'grindelwald' ) ),
+			),
+		) );
+
+		add_filter( 'mse_search_metadata', '__return_false' );
+		try {
+			$this->assertNotContains( $id, $this->search_attachments( 'grindelwald' ) );
+		} finally {
+			remove_filter( 'mse_search_metadata', '__return_false' );
+		}
+	}
+
+	/**
+	 * Test 31: A photo matching in several fields is returned once.
+	 */
+	public function test_metadata_match_has_no_duplicates() {
+		$id = $this->create_attachment( array( 'post_title' => 'lauterbrunnen' ), array(
+			'_wp_attachment_metadata' => array(
+				'image_meta' => array( 'keywords' => array( 'lauterbrunnen' ) ),
+			),
+		) );
+
+		$this->assertSame( array( $id ), $this->search_attachments( 'lauterbrunnen' ) );
+	}
 }

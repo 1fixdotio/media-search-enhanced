@@ -20,6 +20,7 @@ This plugin is made for:
 * Search through all fields in Media Library, including: ID, title, caption, alternative text and description.
 * Search Taxonomies for Media, include the name, slug and description fields.
 * Search media file name.
+* **Photo keywords** — Search the keywords embedded in photos (IPTC/XMP, which WordPress stores in the attachment's `image_meta`). Only the keywords are searched, not the rest of the image metadata such as the camera model.
 * **Multi-term search** — Anywhere in the WordPress admin (the Media Library list view at `upload.php`, the "Add Media" modal, and other admin screens), use commas to search for multiple items at once (e.g. `image-a.jpg, photo-2.jpg`). Matches attachments containing **any** of the terms. Limited to 10 terms per search. Frontend searches still treat commas as literal characters, as a query-amplification guard for public pages.
 * Use shortcode `[mse-search-form]` to insert a media search form in posts and template files. It will search for media by all fields mentioned above.
 
@@ -61,12 +62,21 @@ Please add the following code to the `functions.php` in your theme:
 	}
 	add_filter( 'mse_get_attachment_url', 'my_get_attachment_url', 10, 2 );
 
+= How do I turn off the keyword search? =
+
+Searching the photo keywords scans the attachment metadata of the whole library, so on very large libraries you may prefer to disable it:
+
+	add_filter( 'mse_search_metadata', '__return_false' );
+
 == Screenshots ==
 
 1. Demo search on the Media Library screen.
 2. Demo search on the Insert Media - Media Library screen.
 
 == Changelog ==
+
+= Unreleased =
+* New: The search also matches photo keywords (IPTC/XMP). Filter `mse_search_metadata` turns this off.
 
 = 1.0.1 =
 * Fix: The `[mse-search-form]` shortcode returned no results on the frontend. Attachment searches that don't specify a post status now default to `inherit`; without it WordPress core restricts the query to public statuses, which no attachment has. Regression introduced in 1.0.0.
