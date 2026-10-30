@@ -1,6 +1,6 @@
 # Media Search Enhanced
 
-A WordPress plugin that extends the Media Library search to cover all fields: ID, title, caption, alt text, description, filename, GUID, and taxonomy terms.
+A WordPress plugin that extends the Media Library search to cover all fields: ID, title, caption, alt text, description, filename, GUID, taxonomy terms, and photo keywords.
 
 ## Try it in your browser
 
