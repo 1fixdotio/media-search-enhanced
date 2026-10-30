@@ -71,7 +71,7 @@ Note: the photo keyword search (`get_metadata_match_ids()`) runs one additional 
 
 ### Layer 3: EXPLAIN and timing (manual comparison)
 
-Run profiling **before and after** your changes to compare (the profiling output covers the main query; the keyword lookup query is not included and can be timed separately):
+Run profiling **before and after** your changes to compare (the reported query time includes the photo keyword lookup, while the SQL and EXPLAIN output are those of the main query):
 
 ```bash
 # 1. On the base branch, run profiling and save output
