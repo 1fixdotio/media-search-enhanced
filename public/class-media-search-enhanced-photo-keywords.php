@@ -151,43 +151,61 @@ class Media_Search_Enhanced_Photo_Keywords {
 	}
 
 	/**
-	 * Index the next batch of attachments that have embedded keywords.
+	 * Index the next batch of attachments.
 	 *
-	 * Rows without keywords are skipped in SQL, so they are never unserialized.
+	 * Walks attachment IDs on the posts table's primary key, then reads the
+	 * metadata of just those attachments. Ordering postmeta rows by post_id
+	 * instead makes MySQL sort every remaining metadata row on each batch.
+	 * Metadata without keywords is skipped in SQL, so it is never unserialized.
 	 *
 	 * @param int $after_id Index attachments with a higher post ID than this.
-	 * @param int $limit    Maximum number of attachments to index.
-	 * @return int|null The last indexed post ID, or null when no attachments are left.
+	 * @param int $limit    Maximum number of attachments to look at.
+	 * @return int|null The last attachment ID looked at, or null when no attachments are left.
 	 */
 	public static function backfill_batch( $after_id, $limit ) {
 		global $wpdb;
 
+		$ids = array_map(
+			'intval',
+			$wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT ID FROM $wpdb->posts WHERE post_type = 'attachment' AND ID > %d ORDER BY ID ASC LIMIT %d",
+					$after_id,
+					$limit
+				)
+			)
+		);
+
+		if ( empty( $ids ) ) {
+			return null;
+		}
+
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT post_id, meta_value FROM $wpdb->postmeta"
-				. ' WHERE meta_key = %s AND post_id > %d AND meta_value LIKE %s AND meta_value NOT LIKE %s'
-				. ' ORDER BY post_id ASC LIMIT %d',
+				. ' WHERE post_id IN (' . implode( ',', $ids ) . ')'
+				. ' AND meta_key = %s AND meta_value LIKE %s AND meta_value NOT LIKE %s',
 				self::SOURCE_META_KEY,
-				$after_id,
 				'%s:8:"keywords";a:%',
-				'%s:8:"keywords";a:0:{%',
-				$limit
+				'%s:8:"keywords";a:0:{%'
 			)
 		);
 
 		foreach ( $rows as $row ) {
 			self::index( (int) $row->post_id, $row->meta_value );
 
-			// update_post_meta() loads all meta of the post into the cache and
-			// leaves it there when the value is unchanged.
+			// update_post_meta() caches the post (via wp_is_post_revision()) and,
+			// when the value is unchanged, all of its meta. Drop both so a long
+			// run does not hold every attachment it has indexed in memory.
+			wp_cache_delete( (int) $row->post_id, 'posts' );
 			wp_cache_delete( (int) $row->post_id, 'post_meta' );
 		}
 
-		if ( count( $rows ) < $limit ) {
+		if ( count( $ids ) < $limit ) {
 			return null;
 		}
 
-		return (int) end( $rows )->post_id;
+		return end( $ids );
 	}
 
 	/**
