@@ -43,6 +43,46 @@ class Media_Search_Enhanced_Photo_Keywords {
 	const SOURCE_META_KEY = '_wp_attachment_metadata';
 
 	/**
+	 * WP-Cron hook that indexes attachments uploaded before the index existed.
+	 *
+	 * @var string
+	 */
+	const BACKFILL_HOOK = 'mse_backfill_photo_keywords';
+
+	/**
+	 * Option holding the backfill progress: the last indexed post ID, or
+	 * BACKFILL_DONE once every attachment has been indexed.
+	 *
+	 * @var string
+	 */
+	const BACKFILL_OPTION = 'mse_photo_keywords_backfill';
+
+	/**
+	 * Value of BACKFILL_OPTION once the backfill has finished.
+	 *
+	 * @var string
+	 */
+	const BACKFILL_DONE = 'done';
+
+	/**
+	 * Attachments read per backfill query.
+	 *
+	 * @var int
+	 */
+	const BACKFILL_BATCH_SIZE = 200;
+
+	/**
+	 * Seconds a single cron run keeps indexing before it reschedules itself.
+	 *
+	 * wp-cron.php only runs the events that were due when it started, and
+	 * spawns at most once per WP_CRON_LOCK_TIMEOUT, so one batch per run would
+	 * index a large library very slowly.
+	 *
+	 * @var int
+	 */
+	const BACKFILL_TIME_LIMIT = 10;
+
+	/**
 	 * Register the hooks.
 	 *
 	 * @return void
@@ -51,6 +91,103 @@ class Media_Search_Enhanced_Photo_Keywords {
 		add_action( 'added_post_meta', array( __CLASS__, 'on_meta_saved' ), 10, 4 );
 		add_action( 'updated_post_meta', array( __CLASS__, 'on_meta_saved' ), 10, 4 );
 		add_action( 'deleted_post_meta', array( __CLASS__, 'on_meta_deleted' ), 10, 3 );
+
+		add_action( 'init', array( __CLASS__, 'maybe_schedule_backfill' ) );
+		add_action( self::BACKFILL_HOOK, array( __CLASS__, 'run_backfill' ) );
+	}
+
+	/**
+	 * Start the backfill, or restart it if its cron event was lost.
+	 *
+	 * A one-off event whose callback is missing (e.g. the plugin was
+	 * deactivated mid-backfill) is dropped when it fires, so the event is
+	 * rescheduled whenever the backfill is unfinished and nothing is queued.
+	 *
+	 * @return void
+	 */
+	public static function maybe_schedule_backfill() {
+		$state = get_option( self::BACKFILL_OPTION );
+
+		if ( self::BACKFILL_DONE === $state ) {
+			return;
+		}
+
+		if ( false === $state ) {
+			add_option( self::BACKFILL_OPTION, 0, '', 'yes' );
+		}
+
+		if ( ! wp_next_scheduled( self::BACKFILL_HOOK ) ) {
+			wp_schedule_single_event( time(), self::BACKFILL_HOOK );
+		}
+	}
+
+	/**
+	 * Index existing attachments in batches until done or out of time.
+	 *
+	 * @return void
+	 */
+	public static function run_backfill() {
+		$state = get_option( self::BACKFILL_OPTION );
+
+		if ( self::BACKFILL_DONE === $state ) {
+			return;
+		}
+
+		$last_id  = (int) $state;
+		$deadline = microtime( true ) + self::BACKFILL_TIME_LIMIT;
+
+		do {
+			$last_id = self::backfill_batch( $last_id, self::BACKFILL_BATCH_SIZE );
+
+			if ( null === $last_id ) {
+				update_option( self::BACKFILL_OPTION, self::BACKFILL_DONE );
+				return;
+			}
+
+			update_option( self::BACKFILL_OPTION, $last_id );
+		} while ( microtime( true ) < $deadline );
+
+		wp_schedule_single_event( time(), self::BACKFILL_HOOK );
+	}
+
+	/**
+	 * Index the next batch of attachments that have embedded keywords.
+	 *
+	 * Rows without keywords are skipped in SQL, so they are never unserialized.
+	 *
+	 * @param int $after_id Index attachments with a higher post ID than this.
+	 * @param int $limit    Maximum number of attachments to index.
+	 * @return int|null The last indexed post ID, or null when no attachments are left.
+	 */
+	public static function backfill_batch( $after_id, $limit ) {
+		global $wpdb;
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT post_id, meta_value FROM $wpdb->postmeta"
+				. ' WHERE meta_key = %s AND post_id > %d AND meta_value LIKE %s AND meta_value NOT LIKE %s'
+				. ' ORDER BY post_id ASC LIMIT %d',
+				self::SOURCE_META_KEY,
+				$after_id,
+				'%s:8:"keywords";a:%',
+				'%s:8:"keywords";a:0:{%',
+				$limit
+			)
+		);
+
+		foreach ( $rows as $row ) {
+			self::index( (int) $row->post_id, $row->meta_value );
+
+			// update_post_meta() loads all meta of the post into the cache and
+			// leaves it there when the value is unchanged.
+			wp_cache_delete( (int) $row->post_id, 'post_meta' );
+		}
+
+		if ( count( $rows ) < $limit ) {
+			return null;
+		}
+
+		return (int) end( $rows )->post_id;
 	}
 
 	/**
