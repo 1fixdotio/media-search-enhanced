@@ -36,6 +36,12 @@ bash bin/install-wp-tests.sh <db-name> <db-user> <db-pass> [db-host] [wp-version
 
 CI runs `composer test` on every push/PR across PHP 7.4-8.3 with MySQL 8.0.
 
+### Photo keyword index
+
+WordPress stores a photo's IPTC keywords inside the serialized `_wp_attachment_metadata` value, which SQL can't search without also matching file names, sizes and camera data. `public/class-media-search-enhanced-photo-keywords.php` copies the keywords into `_mse_photo_keywords`, one per line, whenever that metadata is added, updated or deleted. The search matches that key with an `EXISTS` subquery, the same way it matches alt text.
+
+Attachments uploaded before the index existed are indexed by the `mse_backfill_photo_keywords` WP-Cron event. Its progress is stored in the `mse_photo_keywords_backfill` option: the last indexed post ID, or `done`. Delete the option to run the backfill again.
+
 ## Validating SQL performance changes
 
 When working on query changes (e.g., [#10](https://github.com/1fixdotio/media-search-enhanced/issues/10)), use these three layers to validate correctness and performance.
@@ -67,11 +73,9 @@ The benchmark tests in `tests/benchmark/QueryStructureTest.php` assert on the **
 
 If the structural tests pass, the query is shaped as intended.
 
-Note: the photo keyword search (`get_metadata_match_ids()`) runs one additional query on `postmeta` before the main query, because the keywords are stored in serialized PHP. The structure tests identify the main query as the one that selects `FROM {posts}`, so they do not assert on that lookup query. It can be disabled with the `mse_search_metadata` filter.
-
 ### Layer 3: EXPLAIN and timing (manual comparison)
 
-Run profiling **before and after** your changes to compare (the reported query time includes the photo keyword lookup, while the SQL and EXPLAIN output are those of the main query):
+Run profiling **before and after** your changes to compare:
 
 ```bash
 # 1. On the base branch, run profiling and save output
