@@ -186,18 +186,27 @@ class Media_Search_Enhanced_Photo_Keywords {
 	 * @return void
 	 */
 	public static function run_backfill() {
-		$state = get_option( self::BACKFILL_OPTION );
+		// Read the restart count before the progress, and both from the database:
+		// a restart in another request after this process loaded its options would
+		// otherwise pair the new count with the old progress, and the run would
+		// skip the attachments below it.
+		$run   = self::current_backfill_run();
+		$state = self::get_option_from_database( self::BACKFILL_OPTION );
 
 		if ( self::BACKFILL_DONE === $state ) {
 			return;
 		}
 
-		$until = get_option( self::BACKFILL_UNTIL_OPTION );
+		$until = self::get_option_from_database( self::BACKFILL_UNTIL_OPTION );
 		if ( false === $state || false === $until ) {
 			$until = self::save_backfill_bound();
 		}
 
-		$run      = self::current_backfill_run();
+		// Restarted while reading the progress: the restarted run takes over.
+		if ( self::current_backfill_run() !== $run ) {
+			return;
+		}
+
 		$last_id  = (int) $state;
 		$deadline = microtime( true ) + self::BACKFILL_TIME_LIMIT;
 
@@ -249,11 +258,23 @@ class Media_Search_Enhanced_Photo_Keywords {
 	 * @return int
 	 */
 	private static function current_backfill_run() {
+		return (int) self::get_option_from_database( self::BACKFILL_RUN_OPTION );
+	}
+
+	/**
+	 * Read an option from the database, bypassing the option cache.
+	 *
+	 * @param string $option Option name.
+	 * @return mixed The option value, or false if it does not exist.
+	 */
+	private static function get_option_from_database( $option ) {
 		global $wpdb;
 
-		return (int) $wpdb->get_var(
-			$wpdb->prepare( "SELECT option_value FROM $wpdb->options WHERE option_name = %s", self::BACKFILL_RUN_OPTION )
+		$row = $wpdb->get_row(
+			$wpdb->prepare( "SELECT option_value FROM $wpdb->options WHERE option_name = %s", $option )
 		);
+
+		return null === $row ? false : maybe_unserialize( $row->option_value );
 	}
 
 	/**
@@ -308,18 +329,31 @@ class Media_Search_Enhanced_Photo_Keywords {
 		}
 
 		// Remove index entries whose keywords or metadata were removed while
-		// nothing was watching (plugin inactive, bulk deletion).
+		// nothing was watching (plugin inactive, bulk deletion). The metadata is
+		// checked again inside the DELETE, not taken from the batch's snapshot:
+		// an attachment that gained keywords since the snapshot keeps the entry
+		// its save hook just wrote.
 		$without_keywords = array_diff( $ids, $with_keywords );
 		if ( ! empty( $without_keywords ) ) {
-			$stale = $wpdb->get_col(
+			$deleted = $wpdb->query(
 				$wpdb->prepare(
-					"SELECT post_id FROM $wpdb->postmeta WHERE meta_key = %s AND post_id IN (" . implode( ',', $without_keywords ) . ')',
+					"DELETE idx FROM $wpdb->postmeta AS idx"
+					. " LEFT JOIN $wpdb->postmeta AS src ON ( src.post_id = idx.post_id AND src.meta_key = %s AND src.meta_value LIKE %s AND src.meta_value NOT LIKE %s )"
+					. ' WHERE idx.meta_key = %s AND idx.post_id IN (' . implode( ',', $without_keywords ) . ') AND src.meta_id IS NULL',
+					self::SOURCE_META_KEY,
+					'%s:8:"keywords";a:%',
+					'%s:8:"keywords";a:0:{%',
 					self::META_KEY
 				)
 			);
-			foreach ( $stale as $post_id ) {
-				delete_post_meta( (int) $post_id, self::META_KEY );
-				self::evict_from_cache( (int) $post_id );
+
+			if ( $deleted ) {
+				// What delete_post_meta() would have invalidated: the posts' meta
+				// and cached query results, which include searches.
+				foreach ( $without_keywords as $post_id ) {
+					self::evict_from_cache( $post_id );
+				}
+				wp_cache_set_posts_last_changed();
 			}
 		}
 

@@ -391,6 +391,102 @@ class PhotoKeywordsTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * A restart made by another request after this process loaded its options:
+	 * the run must use the restarted progress, not the stale cached one, or it
+	 * would skip every attachment below the old position and mark the backfill done.
+	 */
+	public function test_run_uses_progress_restarted_by_another_request() {
+		global $wpdb;
+
+		$first  = $this->create_attachment();
+		$second = $this->create_attachment();
+		$this->insert_metadata_without_hooks( $first, $this->metadata( array( 'positano' ) ) );
+		$this->insert_metadata_without_hooks( $second, $this->metadata( array( 'ravello' ) ) );
+
+		Media_Search_Enhanced_Photo_Keywords::restart_backfill();
+		wp_clear_scheduled_hook( Media_Search_Enhanced_Photo_Keywords::BACKFILL_HOOK );
+
+		// This process has seen progress past both attachments.
+		update_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION, $second );
+
+		// Another request restarts the backfill: the database changes, this process's option cache does not.
+		$run = (int) $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM $wpdb->options WHERE option_name = %s", Media_Search_Enhanced_Photo_Keywords::BACKFILL_RUN_OPTION ) );
+		$wpdb->update( $wpdb->options, array( 'option_value' => (string) ( $run + 1 ) ), array( 'option_name' => Media_Search_Enhanced_Photo_Keywords::BACKFILL_RUN_OPTION ) );
+		$wpdb->update( $wpdb->options, array( 'option_value' => '0' ), array( 'option_name' => Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION ) );
+		$this->assertSame( $second, (int) get_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION ), 'Precondition: the cached progress is stale.' );
+
+		Media_Search_Enhanced_Photo_Keywords::run_backfill();
+
+		$this->assertSame( 'positano', $this->indexed( $first ), 'Attachments below the stale position must not be skipped.' );
+		$this->assertSame( 'ravello', $this->indexed( $second ) );
+	}
+
+	/**
+	 * The clean-up checks the current metadata, not the batch's snapshot: an
+	 * attachment that gains keywords after the snapshot keeps its new entry.
+	 */
+	public function test_cleanup_keeps_entries_written_after_the_snapshot() {
+		$indexed_first = $this->create_attachment();
+		$gains_keywords = $this->create_attachment();
+		$this->insert_metadata_without_hooks( $indexed_first, $this->metadata( array( 'positano' ) ) );
+		$this->insert_metadata_without_hooks( $gains_keywords, $this->metadata( array() ) );
+
+		Media_Search_Enhanced_Photo_Keywords::restart_backfill();
+		wp_clear_scheduled_hook( Media_Search_Enhanced_Photo_Keywords::BACKFILL_HOOK );
+
+		// After the batch's snapshot, while it indexes the first attachment, another
+		// request saves keywords for the second; its save hook indexes them.
+		$metadata = $this->metadata( array( 'forest' ) );
+		$save     = static function ( $meta_id, $object_id, $meta_key ) use ( $indexed_first, $gains_keywords, $metadata ) {
+			if ( Media_Search_Enhanced_Photo_Keywords::META_KEY === $meta_key && $indexed_first === (int) $object_id ) {
+				wp_update_attachment_metadata( $gains_keywords, $metadata );
+			}
+		};
+		add_action( 'added_post_meta', $save, 20, 3 );
+		Media_Search_Enhanced_Photo_Keywords::run_backfill();
+		remove_action( 'added_post_meta', $save, 20 );
+
+		$this->assertSame( 'positano', $this->indexed( $indexed_first ) );
+		$this->assertSame( 'forest', $this->indexed( $gains_keywords ), 'The clean-up must not delete an entry written after the snapshot.' );
+	}
+
+	/**
+	 * The clean-up deletes with SQL rather than delete_post_meta(), so it has to
+	 * invalidate cached query results itself, or a cached search keeps finding
+	 * the attachment by its removed keyword.
+	 */
+	public function test_cleanup_invalidates_cached_search_results() {
+		global $wpdb;
+
+		$id = $this->create_attachment();
+		wp_update_attachment_metadata( $id, $this->metadata( array( 'positano' ) ) );
+
+		$search = static function () {
+			$query = new WP_Query( array(
+				'post_type'   => 'attachment',
+				'post_status' => 'inherit',
+				's'           => 'positano',
+				'fields'      => 'ids',
+			) );
+			return array_map( 'intval', $query->posts );
+		};
+
+		$this->assertContains( $id, $search(), 'Precondition: found by keyword, and the result is now cached.' );
+
+		// Keywords removed without the plugin's hooks.
+		$wpdb->update(
+			$wpdb->postmeta,
+			array( 'meta_value' => serialize( $this->metadata( array() ) ) ),
+			array( 'post_id' => $id, 'meta_key' => '_wp_attachment_metadata' )
+		);
+		wp_cache_delete( $id, 'post_meta' );
+
+		Media_Search_Enhanced_Photo_Keywords::run_backfill();
+
+		$this->assertNotContains( $id, $search() );
+	}
+
+	/**
 	 * A restart that lands between a run's progress check and its write is put back.
 	 */
 	public function test_restart_between_progress_check_and_write_is_put_back() {
