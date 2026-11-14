@@ -352,6 +352,73 @@ class PhotoKeywordsTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * A restart (e.g. a bulk metadata deletion) while a run is working: the run
+	 * stops instead of saving its own progress over the restart.
+	 */
+	public function test_restart_during_a_run_keeps_the_restart() {
+		$id = $this->create_attachment();
+		$this->insert_metadata_without_hooks( $id, $this->metadata( array( 'positano' ) ) );
+
+		Media_Search_Enhanced_Photo_Keywords::restart_backfill();
+		// wp-cron.php removes a one-off event before running it.
+		wp_clear_scheduled_hook( Media_Search_Enhanced_Photo_Keywords::BACKFILL_HOOK );
+
+		// The restart arrives while the batch is indexing.
+		$restart = static function ( $meta_id, $object_id, $meta_key ) {
+			if ( Media_Search_Enhanced_Photo_Keywords::META_KEY === $meta_key ) {
+				Media_Search_Enhanced_Photo_Keywords::restart_backfill();
+			}
+		};
+		$written = array();
+		$record  = static function ( $value ) use ( &$written ) {
+			$written[] = $value;
+			return $value;
+		};
+		add_action( 'added_post_meta', $restart, 20, 3 );
+		add_filter( 'pre_update_option_' . Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION, $record );
+		Media_Search_Enhanced_Photo_Keywords::run_backfill();
+		remove_action( 'added_post_meta', $restart, 20 );
+		remove_filter( 'pre_update_option_' . Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION, $record );
+
+		$this->assertSame( array(), $written, 'The interrupted run must not write its progress at all: a restarted run may already be using it.' );
+		$this->assertNotSame( Media_Search_Enhanced_Photo_Keywords::BACKFILL_DONE, get_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION ), 'The interrupted run must not mark the backfill done.' );
+		$this->assertSame( 0, (int) get_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION ), 'The restart should start from the first attachment.' );
+		$this->assertNotFalse( wp_next_scheduled( Media_Search_Enhanced_Photo_Keywords::BACKFILL_HOOK ), 'The restarted backfill should be scheduled.' );
+
+		Media_Search_Enhanced_Photo_Keywords::run_backfill();
+
+		$this->assertSame( Media_Search_Enhanced_Photo_Keywords::BACKFILL_DONE, get_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION ) );
+	}
+
+	/**
+	 * A restart that lands between a run's progress check and its write is put back.
+	 */
+	public function test_restart_between_progress_check_and_write_is_put_back() {
+		$id = $this->create_attachment();
+		$this->insert_metadata_without_hooks( $id, $this->metadata( array( 'positano' ) ) );
+
+		Media_Search_Enhanced_Photo_Keywords::restart_backfill();
+		wp_clear_scheduled_hook( Media_Search_Enhanced_Photo_Keywords::BACKFILL_HOOK );
+
+		// Runs inside update_option(), after the run checked the restart count.
+		$restarted = false;
+		$restart   = static function ( $value ) use ( &$restarted ) {
+			if ( ! $restarted ) {
+				$restarted = true;
+				Media_Search_Enhanced_Photo_Keywords::restart_backfill();
+			}
+			return $value;
+		};
+		add_filter( 'pre_update_option_' . Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION, $restart );
+		Media_Search_Enhanced_Photo_Keywords::run_backfill();
+		remove_filter( 'pre_update_option_' . Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION, $restart );
+
+		$this->assertTrue( $restarted, 'Precondition: the restart ran during the progress write.' );
+		$this->assertNotSame( Media_Search_Enhanced_Photo_Keywords::BACKFILL_DONE, get_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION ), 'The run must not overwrite the restart.' );
+		$this->assertSame( 0, (int) get_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION ) );
+	}
+
+	/**
 	 * delete_post_meta_by_key() does not say which posts it affected, so the
 	 * backfill is restarted to remove their entries.
 	 */

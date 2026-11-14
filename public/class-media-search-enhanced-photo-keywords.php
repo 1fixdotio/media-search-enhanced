@@ -72,6 +72,17 @@ class Media_Search_Enhanced_Photo_Keywords {
 	const BACKFILL_UNTIL_OPTION = 'mse_photo_keywords_backfill_until';
 
 	/**
+	 * Option counting backfill restarts.
+	 *
+	 * A cron run that is still working when the backfill is restarted (e.g. by
+	 * a bulk metadata deletion) sees the count change and stops, instead of
+	 * writing its own progress over the restart.
+	 *
+	 * @var string
+	 */
+	const BACKFILL_RUN_OPTION = 'mse_photo_keywords_backfill_run';
+
+	/**
 	 * Value of BACKFILL_OPTION once the backfill has finished.
 	 *
 	 * @var string
@@ -138,6 +149,7 @@ class Media_Search_Enhanced_Photo_Keywords {
 	 * @return void
 	 */
 	public static function restart_backfill() {
+		update_option( self::BACKFILL_RUN_OPTION, self::current_backfill_run() + 1, false );
 		delete_option( self::BACKFILL_OPTION );
 		self::maybe_schedule_backfill();
 	}
@@ -185,21 +197,63 @@ class Media_Search_Enhanced_Photo_Keywords {
 			$until = self::save_backfill_bound();
 		}
 
+		$run      = self::current_backfill_run();
 		$last_id  = (int) $state;
 		$deadline = microtime( true ) + self::BACKFILL_TIME_LIMIT;
 
 		do {
 			$last_id = self::backfill_batch( $last_id, self::BACKFILL_BATCH_SIZE, (int) $until );
 
-			if ( null === $last_id ) {
-				update_option( self::BACKFILL_OPTION, self::BACKFILL_DONE );
+			if ( ! self::save_backfill_progress( $run, null === $last_id ? self::BACKFILL_DONE : $last_id ) ) {
+				// Restarted while this run was working; the restart owns the progress now.
 				return;
 			}
 
-			update_option( self::BACKFILL_OPTION, $last_id );
+			if ( null === $last_id ) {
+				return;
+			}
 		} while ( microtime( true ) < $deadline );
 
 		wp_schedule_single_event( time(), self::BACKFILL_HOOK );
+	}
+
+	/**
+	 * Save the backfill progress, unless the backfill was restarted since this run began.
+	 *
+	 * @param int        $run      Restart count when this run began.
+	 * @param int|string $progress Last attachment ID examined, or BACKFILL_DONE.
+	 * @return bool False if the backfill was restarted and this run should stop.
+	 */
+	private static function save_backfill_progress( $run, $progress ) {
+		if ( self::current_backfill_run() !== $run ) {
+			return false;
+		}
+
+		update_option( self::BACKFILL_OPTION, $progress );
+
+		// A restart between the check and the write was overwritten: put its reset back.
+		if ( self::current_backfill_run() !== $run ) {
+			update_option( self::BACKFILL_OPTION, 0 );
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Get the backfill restart count.
+	 *
+	 * Read from the database rather than the option cache: a cron run lasts
+	 * several seconds and a restart happens in another request.
+	 *
+	 * @return int
+	 */
+	private static function current_backfill_run() {
+		global $wpdb;
+
+		return (int) $wpdb->get_var(
+			$wpdb->prepare( "SELECT option_value FROM $wpdb->options WHERE option_name = %s", self::BACKFILL_RUN_OPTION )
+		);
 	}
 
 	/**
