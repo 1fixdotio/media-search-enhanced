@@ -271,10 +271,18 @@ class Media_Search_Enhanced {
 			$tax_filter = '( ' . implode( ' OR ', $tax_where ) . ' )';
 		}
 
+		/**
+		 * Filters whether the search matches the keywords embedded in photos.
+		 *
+		 * @param bool     $search_keywords Whether to search photo keywords. Default true.
+		 * @param WP_Query $query           The query being searched.
+		 */
+		$search_keywords = (bool) apply_filters( 'mse_search_photo_keywords', true, $query );
+
 		// Generate search conditions for each term, then OR them together.
 		$term_groups = array();
 		foreach ( $terms as $term ) {
-			$term_groups[] = self::build_search_conditions( $term, $taxes, $tax_filter );
+			$term_groups[] = self::build_search_conditions( $term, $taxes, $tax_filter, $search_keywords );
 		}
 
 		$pieces['where'] .= " AND ( " . implode( ' OR ', $term_groups ) . " )";
@@ -287,12 +295,13 @@ class Media_Search_Enhanced {
 	/**
 	 * Build the SQL search conditions for a single search term.
 	 *
-	 * @param string $term       The search term.
-	 * @param array  $taxes      Attachment taxonomies.
-	 * @param string $tax_filter Pre-built taxonomy filter clause.
+	 * @param string $term            The search term.
+	 * @param array  $taxes           Attachment taxonomies.
+	 * @param string $tax_filter      Pre-built taxonomy filter clause.
+	 * @param bool   $search_keywords Whether to match embedded photo keywords.
 	 * @return string SQL fragment: ( id_cond OR title LIKE ... OR EXISTS ... )
 	 */
-	private static function build_search_conditions( $term, $taxes, $tax_filter ) {
+	private static function build_search_conditions( $term, $taxes, $tax_filter, $search_keywords = true ) {
 		global $wpdb;
 
 		$like = '%' . $wpdb->esc_like( $term ) . '%';
@@ -322,6 +331,15 @@ class Media_Search_Enhanced {
 			" OR EXISTS (SELECT 1 FROM $wpdb->postmeta WHERE $wpdb->postmeta.post_id = $wpdb->posts.ID AND $wpdb->postmeta.meta_key = '_wp_attached_file' AND $wpdb->postmeta.meta_value LIKE %s)",
 			$like
 		);
+
+		// Embedded photo keywords (IPTC), kept as plain text by Media_Search_Enhanced_Photo_Keywords.
+		if ( $search_keywords ) {
+			$conditions .= $wpdb->prepare(
+				" OR EXISTS (SELECT 1 FROM $wpdb->postmeta WHERE $wpdb->postmeta.post_id = $wpdb->posts.ID AND $wpdb->postmeta.meta_key = %s AND $wpdb->postmeta.meta_value LIKE %s)",
+				Media_Search_Enhanced_Photo_Keywords::META_KEY,
+				$like
+			);
+		}
 
 		// Taxonomy
 		if ( ! empty( $taxes ) && ! empty( $tax_filter ) ) {

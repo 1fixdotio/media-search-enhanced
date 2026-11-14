@@ -20,6 +20,7 @@ This plugin is made for:
 * Search through all fields in Media Library, including: ID, title, caption, alternative text and description.
 * Search Taxonomies for Media, include the name, slug and description fields.
 * Search media file name.
+* **Photo keywords** — Search the IPTC keywords embedded in photos, which WordPress reads when a photo is uploaded. Only the keywords are searched, not other image metadata such as the camera model. Keywords stored only as XMP are not read by WordPress, so they can't be searched. Photos already in the Media Library are indexed in the background after the plugin is installed or updated.
 * **Multi-term search** — Anywhere in the WordPress admin (the Media Library list view at `upload.php`, the "Add Media" modal, and other admin screens), use commas to search for multiple items at once (e.g. `image-a.jpg, photo-2.jpg`). Matches attachments containing **any** of the terms. Limited to 10 terms per search. Frontend searches still treat commas as literal characters, as a query-amplification guard for public pages.
 * Use shortcode `[mse-search-form]` to insert a media search form in posts and template files. It will search for media by all fields mentioned above.
 
@@ -61,12 +62,24 @@ Please add the following code to the `functions.php` in your theme:
 	}
 	add_filter( 'mse_get_attachment_url', 'my_get_attachment_url', 10, 2 );
 
+= How do I turn off the keyword search? =
+
+Add this to the `functions.php` in your theme:
+
+	add_filter( 'mse_search_photo_keywords', '__return_false' );
+
+The filter also receives the `WP_Query` being searched, so you can turn keyword search off for some searches only.
+
 == Screenshots ==
 
 1. Demo search on the Media Library screen.
 2. Demo search on the Insert Media - Media Library screen.
 
 == Changelog ==
+
+= Unreleased =
+* New: The search also matches the IPTC keywords embedded in photos. Filter `mse_search_photo_keywords` turns this off. Props @markhowellsmead.
+* Note: Photos uploaded before this version are indexed by a background task (WP-Cron) after updating. On large libraries their keywords become searchable as indexing progresses. The task runs again whenever the plugin is activated, to pick up photos uploaded or changed while it was inactive.
 
 = 1.0.1 =
 * Fix: The `[mse-search-form]` shortcode returned no results on the frontend. Attachment searches that don't specify a post status now default to `inherit`; without it WordPress core restricts the query to public statuses, which no attachment has. Regression introduced in 1.0.0.

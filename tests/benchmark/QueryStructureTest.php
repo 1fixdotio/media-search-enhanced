@@ -29,6 +29,13 @@ class QueryStructureTest extends WP_UnitTestCase {
 			update_post_meta( $id, '_wp_attachment_image_alt', "Alt text for benchmark image {$i}" );
 			update_post_meta( $id, '_wp_attached_file', "2024/01/benchmark-file-{$i}.jpg" );
 
+			// Half the attachments carry embedded photo keywords, indexed into _mse_photo_keywords.
+			if ( $i % 2 === 0 ) {
+				update_post_meta( $id, '_wp_attachment_metadata', array(
+					'image_meta' => array( 'keywords' => array( 'travel', "benchmark-keyword-{$i}" ) ),
+				) );
+			}
+
 			self::$attachment_ids[] = $id;
 		}
 
@@ -141,6 +148,32 @@ class QueryStructureTest extends WP_UnitTestCase {
 			$result['sql'],
 			'Taxonomy EXISTS subquery should correlate tr.object_id to posts.ID.'
 		);
+	}
+
+	/**
+	 * Assert photo keywords are matched by a correlated EXISTS on their own meta key,
+	 * and that the mse_search_photo_keywords filter removes it.
+	 */
+	public function test_photo_keywords_use_correlated_exists() {
+		$result = $this->capture_query( 'benchmark-keyword' );
+
+		$this->assertNotEmpty( $result['sql'], 'Should have captured the search SQL.' );
+		$this->assertMatchesRegularExpression(
+			"/EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+\S+postmeta\s+WHERE\s+\S+postmeta\.post_id\s*=\s*\S+posts\.ID\s+AND\s+\S+postmeta\.meta_key\s*=\s*'_mse_photo_keywords'/i",
+			$result['sql'],
+			'Photo keywords should be matched by an EXISTS subquery correlated to posts.ID.'
+		);
+		$this->assertStringNotContainsString( '_wp_attachment_metadata', $result['sql'], 'The search must not read the serialized attachment metadata.' );
+
+		add_filter( 'mse_search_photo_keywords', '__return_false' );
+		try {
+			$off = $this->capture_query( 'benchmark-keyword' );
+		} finally {
+			remove_filter( 'mse_search_photo_keywords', '__return_false' );
+		}
+
+		$this->assertNotEmpty( $off['sql'], 'Should have captured the search SQL with keyword search off.' );
+		$this->assertStringNotContainsString( '_mse_photo_keywords', $off['sql'], 'The filter should remove the keyword subquery.' );
 	}
 
 	public function test_numeric_search_uses_id_equals() {

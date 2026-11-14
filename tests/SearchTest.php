@@ -720,4 +720,154 @@ class SearchTest extends WP_UnitTestCase {
 			'The main query for the shortcode URL should find the attachment.'
 		);
 	}
+
+	/**
+	 * Test 28: Search by embedded photo keyword (IPTC).
+	 *
+	 * WordPress stores keywords in the serialized `image_meta` array of `_wp_attachment_metadata`;
+	 * the plugin copies them into a searchable meta key when that value is saved.
+	 */
+	public function test_search_by_photo_keyword() {
+		$id = $this->create_attachment( array( 'post_title' => 'IMG_0001' ), array(
+			'_wp_attachment_metadata' => array(
+				'image_meta' => array( 'keywords' => array( 'amalfi coast', 'positano' ) ),
+			),
+		) );
+
+		$this->assertContains( $id, $this->search_attachments( 'positano' ) );
+		$this->assertContains( $id, $this->search_attachments( 'AMALFI' ), 'Keyword matching should be case-insensitive.' );
+	}
+
+	/**
+	 * Test 29: Other data in `_wp_attachment_metadata` is not searched.
+	 *
+	 * Only the keywords are matched; the camera name sits in the same serialized value
+	 * and must not produce a hit.
+	 */
+	public function test_photo_metadata_search_only_matches_keywords() {
+		$id = $this->create_attachment( array( 'post_title' => 'IMG_0002' ), array(
+			'_wp_attachment_metadata' => array(
+				'image_meta' => array(
+					'camera'   => 'FinePix X100',
+					'keywords' => array( 'harbour' ),
+				),
+			),
+		) );
+
+		$this->assertNotContains( $id, $this->search_attachments( 'FinePix' ) );
+	}
+
+	/**
+	 * Test 30: Keyword search can be disabled with `mse_search_photo_keywords`.
+	 */
+	public function test_photo_keyword_search_can_be_disabled() {
+		$id = $this->create_attachment( array( 'post_title' => 'IMG_0006' ), array(
+			'_wp_attachment_metadata' => array(
+				'image_meta' => array( 'keywords' => array( 'grindelwald' ) ),
+			),
+		) );
+
+		$this->assertContains( $id, $this->search_attachments( 'grindelwald' ), 'Precondition: the keyword is found while the filter is off.' );
+
+		add_filter( 'mse_search_photo_keywords', '__return_false' );
+		try {
+			$this->assertNotContains( $id, $this->search_attachments( 'grindelwald' ) );
+		} finally {
+			remove_filter( 'mse_search_photo_keywords', '__return_false' );
+		}
+	}
+
+	/**
+	 * Test 31: A photo matching in several fields is returned once.
+	 */
+	public function test_photo_keyword_match_has_no_duplicates() {
+		$id = $this->create_attachment( array( 'post_title' => 'lauterbrunnen' ), array(
+			'_wp_attachment_metadata' => array(
+				'image_meta' => array( 'keywords' => array( 'lauterbrunnen' ) ),
+			),
+		) );
+
+		$this->assertSame( array( $id ), $this->search_attachments( 'lauterbrunnen' ) );
+	}
+
+	/**
+	 * Test 32: Keywords containing `&` are found as typed.
+	 *
+	 * wp_read_image_metadata() runs wp_kses_post_deep(), which stores `B&W` as `B&amp;W`.
+	 */
+	public function test_search_photo_keyword_with_ampersand() {
+		$id = $this->create_attachment( array( 'post_title' => 'IMG_0007' ), array(
+			'_wp_attachment_metadata' => array(
+				'image_meta' => array( 'keywords' => wp_kses_post_deep( array( 'B&W', 'Fish & Chips' ) ) ),
+			),
+		) );
+
+		$this->assertContains( $id, $this->search_attachments( 'B&W' ) );
+		$this->assertContains( $id, $this->search_attachments( 'fish & chips' ) );
+	}
+
+	/**
+	 * Test 33: A search term does not match across two keywords.
+	 *
+	 * Like the other fields, a term must appear within a single keyword.
+	 */
+	public function test_photo_keyword_search_does_not_span_keywords() {
+		$id = $this->create_attachment( array( 'post_title' => 'IMG_0008' ), array(
+			'_wp_attachment_metadata' => array(
+				'image_meta' => array( 'keywords' => array( 'amalfi coast', 'positano' ) ),
+			),
+		) );
+
+		$this->assertNotContains( $id, $this->search_attachments( 'coast positano' ) );
+	}
+
+	/**
+	 * Test 34: Comma-separated search matches photo keywords.
+	 */
+	public function test_comma_search_matches_photo_keywords() {
+		add_filter( 'mse_allow_multi_term_search', '__return_true' );
+
+		$by_title   = $this->create_attachment( array( 'post_title' => 'comma-keyword-title' ) );
+		$by_keyword = $this->create_attachment( array( 'post_title' => 'IMG_0009' ), array(
+			'_wp_attachment_metadata' => array(
+				'image_meta' => array( 'keywords' => array( 'comma-keyword-tag' ) ),
+			),
+		) );
+
+		try {
+			$results = $this->search_attachments( 'comma-keyword-title, comma-keyword-tag' );
+		} finally {
+			remove_filter( 'mse_allow_multi_term_search', '__return_true' );
+		}
+
+		$this->assertContains( $by_title, $results );
+		$this->assertContains( $by_keyword, $results, 'A comma-separated term should match a photo keyword.' );
+	}
+
+	/**
+	 * Test 35: Logged-out visitors cannot find private attachments by keyword.
+	 */
+	public function test_frontend_keyword_search_hides_private_attachments() {
+		$author  = self::factory()->user->create( array( 'role' => 'author' ) );
+		$private = $this->create_attachment( array(
+			'post_title'  => 'IMG_0010',
+			'post_status' => 'private',
+			'post_author' => $author,
+		), array(
+			'_wp_attachment_metadata' => array(
+				'image_meta' => array( 'keywords' => array( 'frontend-secret-keyword' ) ),
+			),
+		) );
+		$public = $this->create_attachment( array( 'post_title' => 'IMG_0011' ), array(
+			'_wp_attachment_metadata' => array(
+				'image_meta' => array( 'keywords' => array( 'frontend-secret-keyword' ) ),
+			),
+		) );
+
+		wp_set_current_user( 0 );
+		$results = $this->search_attachments_frontend( 'frontend-secret-keyword' );
+
+		$this->assertNotContains( $private, $results, 'Logged-out visitors must not see private attachments.' );
+		$this->assertContains( $public, $results, 'Logged-out visitors should find public attachments by keyword.' );
+	}
 }

@@ -1,6 +1,6 @@
 # Media Search Enhanced
 
-A WordPress plugin that extends the Media Library search to cover all fields: ID, title, caption, alt text, description, filename, GUID, and taxonomy terms.
+A WordPress plugin that extends the Media Library search to cover all fields: ID, title, caption, alt text, description, filename, GUID, taxonomy terms, and photo keywords.
 
 ## Try it in your browser
 
@@ -36,6 +36,12 @@ bash bin/install-wp-tests.sh <db-name> <db-user> <db-pass> [db-host] [wp-version
 
 CI runs `composer test` on every push/PR across PHP 7.4-8.3 with MySQL 8.0.
 
+### Photo keyword index
+
+WordPress stores a photo's IPTC keywords inside the serialized `_wp_attachment_metadata` value, which SQL can't search without also matching file names, sizes and camera data. `public/class-media-search-enhanced-photo-keywords.php` copies the keywords into `_mse_photo_keywords`, one per line, whenever that metadata is added, updated or deleted. The search matches that key with an `EXISTS` subquery, the same way it matches alt text.
+
+The `mse_backfill_photo_keywords` WP-Cron event brings the index in line with the attachment metadata: it indexes attachments uploaded before the index existed and removes entries whose keywords are gone. It runs after the plugin is installed or updated, on every activation (nothing keeps the index up to date while the plugin is inactive), and after a bulk deletion of `_wp_attachment_metadata` with `delete_post_meta_by_key()`. Each run stops at the highest post ID when it started, stored in `mse_photo_keywords_backfill_until`; newer uploads are left to the hooks. Progress is stored in the `mse_photo_keywords_backfill` option: the last attachment ID examined (with or without keywords), or `done`. Delete that option to run the backfill again.
+
 ## Validating SQL performance changes
 
 When working on query changes (e.g., [#10](https://github.com/1fixdotio/media-search-enhanced/issues/10)), use these three layers to validate correctness and performance.
@@ -46,7 +52,7 @@ When working on query changes (e.g., [#10](https://github.com/1fixdotio/media-se
 composer test
 ```
 
-The correctness tests in `tests/SearchTest.php` verify that search results are correct across all fields (title, alt text, filename, ID, GUID, taxonomy, etc.), all filters (MIME type, date, post parent), multi-term comma search, and private attachment visibility. These must pass before and after any refactoring.
+The correctness tests in `tests/SearchTest.php` verify that search results are correct across all fields (title, alt text, filename, ID, GUID, taxonomy, embedded photo keywords, etc.), all filters (MIME type, date, post parent), multi-term comma search, and private attachment visibility. These must pass before and after any refactoring.
 
 If a test fails after your change, a search field or filter is broken.
 
@@ -61,6 +67,7 @@ The benchmark tests in `tests/benchmark/QueryStructureTest.php` assert on the **
 | `test_query_does_not_use_distinct` | SQL does **not** contain `DISTINCT` |
 | `test_query_does_not_use_left_join_postmeta` | SQL does **not** contain `LEFT JOIN ... postmeta AS mse_pm` |
 | `test_query_uses_exists_subqueries` | SQL contains `EXISTS` with correct correlation structure |
+| `test_photo_keywords_use_correlated_exists` | Photo keywords are matched by a correlated `EXISTS` on `_mse_photo_keywords`, never on `_wp_attachment_metadata`; the `mse_search_photo_keywords` filter removes it |
 | `test_numeric_search_uses_id_equals` | SQL uses `ID =` (integer comparison) |
 | `test_non_numeric_search_skips_id_match` | SQL uses neither `ID LIKE` nor `ID =` for text searches |
 | `test_multi_term_search_generates_or_groups` | Multi-term SQL contains both terms with multiple EXISTS groups |
@@ -89,6 +96,18 @@ The profiling output includes:
 - **Query time** — wall-clock execution time (run multiple times to reduce noise)
 - **SQL** — the full generated query (verify it matches expectations)
 - **EXPLAIN output** — MySQL's query execution plan
+- **Search scenarios** — a table of searches that exercise different parts of the query, each with result count, median time of 3 runs, peak PHP memory (PHP 8.2+) and number of queries:
+
+| Scenario | Search | What it exercises |
+|---|---|---|
+| Title, matches every row | `profiling-attachment` | The cheapest case: every row matches the first condition, so no subquery runs |
+| Common keyword | `travel` (half the attachments) | The keyword subquery, with many matches |
+| Rare keyword | `aurora` (every 1000th) | The keyword subquery, with few matches |
+| No match | `zq-no-match-qz` | The worst case: every condition is evaluated for every row |
+| Metadata only, must not match | `FinePix` (camera model) | Data in `_wp_attachment_metadata` other than keywords is not searched |
+| Multi-term, two rare keywords | `aurora, harbour` | Comma-separated search with keyword matches |
+
+The test fails if a scenario returns the wrong attachments. It never fails on timing, since that varies across machines; compare the numbers before and after your change on the same machine.
 
 **What to look for in EXPLAIN:**
 
