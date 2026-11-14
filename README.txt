@@ -66,7 +66,7 @@ Please add the following code to the `functions.php` in your theme:
 
 Add this to the `functions.php` in your theme:
 
-	add_filter( 'mse_search_metadata', '__return_false' );
+	add_filter( 'mse_search_photo_keywords', '__return_false' );
 
 The filter also receives the `WP_Query` being searched, so you can turn keyword search off for some searches only.
 
@@ -78,7 +78,7 @@ The filter also receives the `WP_Query` being searched, so you can turn keyword 
 == Changelog ==
 
 = Unreleased =
-* New: The search also matches the IPTC keywords embedded in photos. Filter `mse_search_metadata` turns this off. Props @markhowellsmead.
+* New: The search also matches the IPTC keywords embedded in photos. Filter `mse_search_photo_keywords` turns this off. Props @markhowellsmead.
 * Note: Photos uploaded before this version are indexed by a background task (WP-Cron) after updating. On large libraries their keywords become searchable as indexing progresses.
 
 = 1.0.1 =

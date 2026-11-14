@@ -758,9 +758,9 @@ class SearchTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Test 30: Keyword search can be disabled with `mse_search_metadata`.
+	 * Test 30: Keyword search can be disabled with `mse_search_photo_keywords`.
 	 */
-	public function test_metadata_search_can_be_disabled() {
+	public function test_photo_keyword_search_can_be_disabled() {
 		$id = $this->create_attachment( array( 'post_title' => 'IMG_0006' ), array(
 			'_wp_attachment_metadata' => array(
 				'image_meta' => array( 'keywords' => array( 'grindelwald' ) ),
@@ -769,18 +769,18 @@ class SearchTest extends WP_UnitTestCase {
 
 		$this->assertContains( $id, $this->search_attachments( 'grindelwald' ), 'Precondition: the keyword is found while the filter is off.' );
 
-		add_filter( 'mse_search_metadata', '__return_false' );
+		add_filter( 'mse_search_photo_keywords', '__return_false' );
 		try {
 			$this->assertNotContains( $id, $this->search_attachments( 'grindelwald' ) );
 		} finally {
-			remove_filter( 'mse_search_metadata', '__return_false' );
+			remove_filter( 'mse_search_photo_keywords', '__return_false' );
 		}
 	}
 
 	/**
 	 * Test 31: A photo matching in several fields is returned once.
 	 */
-	public function test_metadata_match_has_no_duplicates() {
+	public function test_photo_keyword_match_has_no_duplicates() {
 		$id = $this->create_attachment( array( 'post_title' => 'lauterbrunnen' ), array(
 			'_wp_attachment_metadata' => array(
 				'image_meta' => array( 'keywords' => array( 'lauterbrunnen' ) ),

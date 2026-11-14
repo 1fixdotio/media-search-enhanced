@@ -277,7 +277,7 @@ class Media_Search_Enhanced {
 		 * @param bool     $search_keywords Whether to search photo keywords. Default true.
 		 * @param WP_Query $query           The query being searched.
 		 */
-		$search_keywords = (bool) apply_filters( 'mse_search_metadata', true, $query );
+		$search_keywords = (bool) apply_filters( 'mse_search_photo_keywords', true, $query );
 
 		// Generate search conditions for each term, then OR them together.
 		$term_groups = array();
