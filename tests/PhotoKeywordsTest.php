@@ -12,6 +12,7 @@ class PhotoKeywordsTest extends WP_UnitTestCase {
 
 	public function tear_down() {
 		wp_clear_scheduled_hook( Media_Search_Enhanced_Photo_Keywords::BACKFILL_HOOK );
+		$this->remove_added_uploads();
 		parent::tear_down();
 	}
 
@@ -70,6 +71,17 @@ class PhotoKeywordsTest extends WP_UnitTestCase {
 
 	private function indexed( $post_id ) {
 		return get_post_meta( $post_id, Media_Search_Enhanced_Photo_Keywords::META_KEY, true );
+	}
+
+	/**
+	 * End to end: core reads the IPTC keywords of an uploaded photo, and they are indexed.
+	 *
+	 * 33772.jpg from the WordPress test data carries the IPTC keywords beach, baywatch, LA, sunset.
+	 */
+	public function test_keywords_of_an_uploaded_photo_are_indexed() {
+		$id = self::factory()->attachment->create_upload_object( DIR_TESTDATA . '/images/33772.jpg' );
+
+		$this->assertSame( "beach\nbaywatch\nLA\nsunset", $this->indexed( $id ) );
 	}
 
 	public function test_keywords_are_indexed_one_per_line() {

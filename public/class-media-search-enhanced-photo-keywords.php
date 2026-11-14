@@ -50,8 +50,9 @@ class Media_Search_Enhanced_Photo_Keywords {
 	const BACKFILL_HOOK = 'mse_backfill_photo_keywords';
 
 	/**
-	 * Option holding the backfill progress: the last indexed post ID, or
-	 * BACKFILL_DONE once every attachment has been indexed.
+	 * Option holding the backfill progress: the last attachment ID examined
+	 * (with or without keywords), or BACKFILL_DONE once every attachment has
+	 * been examined.
 	 *
 	 * @var string
 	 */

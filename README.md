@@ -40,7 +40,7 @@ CI runs `composer test` on every push/PR across PHP 7.4-8.3 with MySQL 8.0.
 
 WordPress stores a photo's IPTC keywords inside the serialized `_wp_attachment_metadata` value, which SQL can't search without also matching file names, sizes and camera data. `public/class-media-search-enhanced-photo-keywords.php` copies the keywords into `_mse_photo_keywords`, one per line, whenever that metadata is added, updated or deleted. The search matches that key with an `EXISTS` subquery, the same way it matches alt text.
 
-Attachments uploaded before the index existed are indexed by the `mse_backfill_photo_keywords` WP-Cron event. Its progress is stored in the `mse_photo_keywords_backfill` option: the last indexed post ID, or `done`. Delete the option to run the backfill again.
+Attachments uploaded before the index existed are indexed by the `mse_backfill_photo_keywords` WP-Cron event. Its progress is stored in the `mse_photo_keywords_backfill` option: the last attachment ID examined (with or without keywords), or `done`. Delete the option to run the backfill again.
 
 ## Validating SQL performance changes
 
