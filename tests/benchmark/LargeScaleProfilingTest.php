@@ -40,6 +40,13 @@ class LargeScaleProfilingTest extends WP_UnitTestCase {
 			update_post_meta( $id, '_wp_attachment_image_alt', "Alt text for profiling image {$i}" );
 			update_post_meta( $id, '_wp_attached_file', "2024/01/profiling-file-{$i}.jpg" );
 
+			// Half the attachments carry embedded photo keywords, indexed into _mse_photo_keywords.
+			if ( $i % 2 === 0 ) {
+				update_post_meta( $id, '_wp_attachment_metadata', array(
+					'image_meta' => array( 'keywords' => array( 'travel', "profiling-keyword-{$i}" ) ),
+				) );
+			}
+
 			self::$attachment_ids[] = $id;
 		}
 
@@ -91,11 +98,10 @@ class LargeScaleProfilingTest extends WP_UnitTestCase {
 
 		$wp_query->query_vars = $original_vars;
 
-		// Find the main query SQL. It selects FROM the posts table, unlike the
-		// photo keyword lookup query which also contains the search term.
+		// Find the main query SQL.
 		$captured_sql = '';
 		foreach ( $wpdb->queries as $q ) {
-			if ( stripos( $q[0], $search ) !== false && stripos( $q[0], "FROM $wpdb->posts" ) !== false ) {
+			if ( stripos( $q[0], $search ) !== false && stripos( $q[0], 'SELECT' ) !== false ) {
 				$captured_sql = $q[0];
 				break;
 			}
