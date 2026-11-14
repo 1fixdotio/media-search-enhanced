@@ -79,7 +79,7 @@ The filter also receives the `WP_Query` being searched, so you can turn keyword 
 
 = Unreleased =
 * New: The search also matches the IPTC keywords embedded in photos. Filter `mse_search_photo_keywords` turns this off. Props @markhowellsmead.
-* Note: Photos uploaded before this version are indexed by a background task (WP-Cron) after updating. On large libraries their keywords become searchable as indexing progresses.
+* Note: Photos uploaded before this version are indexed by a background task (WP-Cron) after updating. On large libraries their keywords become searchable as indexing progresses. The task runs again whenever the plugin is activated, to pick up photos uploaded or changed while it was inactive.
 
 = 1.0.1 =
 * Fix: The `[mse-search-form]` shortcode returned no results on the frontend. Attachment searches that don't specify a post status now default to `inherit`; without it WordPress core restricts the query to public statuses, which no attachment has. Regression introduced in 1.0.0.

@@ -43,7 +43,9 @@ class Media_Search_Enhanced_Photo_Keywords {
 	const SOURCE_META_KEY = '_wp_attachment_metadata';
 
 	/**
-	 * WP-Cron hook that indexes attachments uploaded before the index existed.
+	 * WP-Cron hook that brings the index in line with the attachment metadata:
+	 * it indexes attachments uploaded before the index existed and removes
+	 * entries whose keywords are gone.
 	 *
 	 * @var string
 	 */
@@ -57,6 +59,17 @@ class Media_Search_Enhanced_Photo_Keywords {
 	 * @var string
 	 */
 	const BACKFILL_OPTION = 'mse_photo_keywords_backfill';
+
+	/**
+	 * Option holding the highest post ID when the backfill started.
+	 *
+	 * Attachments created after that are indexed by the meta hooks and never
+	 * touched by the backfill, so it cannot remove the entry of an upload whose
+	 * metadata it read before the upload finished saving it.
+	 *
+	 * @var string
+	 */
+	const BACKFILL_UNTIL_OPTION = 'mse_photo_keywords_backfill_until';
 
 	/**
 	 * Value of BACKFILL_OPTION once the backfill has finished.
@@ -98,6 +111,38 @@ class Media_Search_Enhanced_Photo_Keywords {
 	}
 
 	/**
+	 * Restart the backfill when the plugin is activated.
+	 *
+	 * While the plugin was inactive, nothing kept the index in line with
+	 * uploads and metadata changes.
+	 *
+	 * @param bool $network_wide Whether the plugin is being network-activated.
+	 * @return void
+	 */
+	public static function activate( $network_wide = false ) {
+		if ( is_multisite() && $network_wide ) {
+			foreach ( get_sites( array( 'fields' => 'ids', 'number' => 0 ) ) as $site_id ) {
+				switch_to_blog( $site_id );
+				self::restart_backfill();
+				restore_current_blog();
+			}
+			return;
+		}
+
+		self::restart_backfill();
+	}
+
+	/**
+	 * Run the backfill again from the first attachment.
+	 *
+	 * @return void
+	 */
+	public static function restart_backfill() {
+		delete_option( self::BACKFILL_OPTION );
+		self::maybe_schedule_backfill();
+	}
+
+	/**
 	 * Start the backfill, or restart it if its cron event was lost.
 	 *
 	 * A one-off event whose callback is missing (e.g. the plugin was
@@ -114,6 +159,7 @@ class Media_Search_Enhanced_Photo_Keywords {
 		}
 
 		if ( false === $state ) {
+			self::save_backfill_bound();
 			add_option( self::BACKFILL_OPTION, 0, '', 'yes' );
 		}
 
@@ -134,11 +180,16 @@ class Media_Search_Enhanced_Photo_Keywords {
 			return;
 		}
 
+		$until = get_option( self::BACKFILL_UNTIL_OPTION );
+		if ( false === $state || false === $until ) {
+			$until = self::save_backfill_bound();
+		}
+
 		$last_id  = (int) $state;
 		$deadline = microtime( true ) + self::BACKFILL_TIME_LIMIT;
 
 		do {
-			$last_id = self::backfill_batch( $last_id, self::BACKFILL_BATCH_SIZE );
+			$last_id = self::backfill_batch( $last_id, self::BACKFILL_BATCH_SIZE, (int) $until );
 
 			if ( null === $last_id ) {
 				update_option( self::BACKFILL_OPTION, self::BACKFILL_DONE );
@@ -152,26 +203,29 @@ class Media_Search_Enhanced_Photo_Keywords {
 	}
 
 	/**
-	 * Index the next batch of attachments.
+	 * Bring the next batch of attachments in line with their metadata.
 	 *
 	 * Walks attachment IDs on the posts table's primary key, then reads the
 	 * metadata of just those attachments. Ordering postmeta rows by post_id
 	 * instead makes MySQL sort every remaining metadata row on each batch.
-	 * Metadata without keywords is skipped in SQL, so it is never unserialized.
+	 * Metadata without keywords is skipped in SQL, so it is never unserialized;
+	 * attachments in the batch that have no keywords lose any index entry.
 	 *
-	 * @param int $after_id Index attachments with a higher post ID than this.
-	 * @param int $limit    Maximum number of attachments to look at.
+	 * @param int      $after_id Look at attachments with a higher post ID than this.
+	 * @param int      $limit    Maximum number of attachments to look at.
+	 * @param int|null $until_id Highest post ID to look at, or null for no limit.
 	 * @return int|null The last attachment ID looked at, or null when no attachments are left.
 	 */
-	public static function backfill_batch( $after_id, $limit ) {
+	public static function backfill_batch( $after_id, $limit, $until_id = null ) {
 		global $wpdb;
 
 		$ids = array_map(
 			'intval',
 			$wpdb->get_col(
 				$wpdb->prepare(
-					"SELECT ID FROM $wpdb->posts WHERE post_type = 'attachment' AND ID > %d ORDER BY ID ASC LIMIT %d",
+					"SELECT ID FROM $wpdb->posts WHERE post_type = 'attachment' AND ID > %d AND ID <= %d ORDER BY ID ASC LIMIT %d",
 					$after_id,
+					null === $until_id ? PHP_INT_MAX : $until_id,
 					$limit
 				)
 			)
@@ -192,14 +246,27 @@ class Media_Search_Enhanced_Photo_Keywords {
 			)
 		);
 
+		$with_keywords = array();
 		foreach ( $rows as $row ) {
+			$with_keywords[] = (int) $row->post_id;
 			self::index( (int) $row->post_id, $row->meta_value );
+			self::evict_from_cache( (int) $row->post_id );
+		}
 
-			// update_post_meta() caches the post (via wp_is_post_revision()) and,
-			// when the value is unchanged, all of its meta. Drop both so a long
-			// run does not hold every attachment it has indexed in memory.
-			wp_cache_delete( (int) $row->post_id, 'posts' );
-			wp_cache_delete( (int) $row->post_id, 'post_meta' );
+		// Remove index entries whose keywords or metadata were removed while
+		// nothing was watching (plugin inactive, bulk deletion).
+		$without_keywords = array_diff( $ids, $with_keywords );
+		if ( ! empty( $without_keywords ) ) {
+			$stale = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT post_id FROM $wpdb->postmeta WHERE meta_key = %s AND post_id IN (" . implode( ',', $without_keywords ) . ')',
+					self::META_KEY
+				)
+			);
+			foreach ( $stale as $post_id ) {
+				delete_post_meta( (int) $post_id, self::META_KEY );
+				self::evict_from_cache( (int) $post_id );
+			}
 		}
 
 		if ( count( $ids ) < $limit ) {
@@ -231,17 +298,54 @@ class Media_Search_Enhanced_Photo_Keywords {
 	/**
 	 * Drop the keywords when the attachment metadata is deleted.
 	 *
+	 * A bulk deletion (delete_post_meta_by_key()) does not say which posts it
+	 * affected, so the backfill is restarted to remove their entries.
+	 *
 	 * @param string[] $meta_ids  Deleted meta IDs.
 	 * @param int      $object_id Post ID. Empty when deleting the key from all posts.
 	 * @param string   $meta_key  Meta key.
 	 * @return void
 	 */
 	public static function on_meta_deleted( $meta_ids, $object_id, $meta_key ) {
-		if ( self::SOURCE_META_KEY !== $meta_key || ! $object_id ) {
+		if ( self::SOURCE_META_KEY !== $meta_key ) {
+			return;
+		}
+
+		if ( ! $object_id ) {
+			self::restart_backfill();
 			return;
 		}
 
 		delete_post_meta( $object_id, self::META_KEY );
+	}
+
+	/**
+	 * Save the highest current post ID as the end of the backfill.
+	 *
+	 * @return int The saved post ID.
+	 */
+	private static function save_backfill_bound() {
+		global $wpdb;
+
+		$until = (int) $wpdb->get_var( "SELECT MAX(ID) FROM $wpdb->posts" );
+		update_option( self::BACKFILL_UNTIL_OPTION, $until, false );
+
+		return $until;
+	}
+
+	/**
+	 * Drop a post and its meta from the object cache.
+	 *
+	 * update_post_meta() and delete_post_meta() cache the post (via
+	 * wp_is_post_revision()) and, when nothing changes, all of its meta, so a
+	 * long backfill would otherwise hold every attachment it looked at.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return void
+	 */
+	private static function evict_from_cache( $post_id ) {
+		wp_cache_delete( $post_id, 'posts' );
+		wp_cache_delete( $post_id, 'post_meta' );
 	}
 
 	/**

@@ -7,7 +7,30 @@ class PhotoKeywordsTest extends WP_UnitTestCase {
 	public function set_up() {
 		parent::set_up();
 		delete_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION );
+		delete_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_UNTIL_OPTION );
 		wp_clear_scheduled_hook( Media_Search_Enhanced_Photo_Keywords::BACKFILL_HOOK );
+	}
+
+	/**
+	 * Highest post ID in the database.
+	 *
+	 * @return int
+	 */
+	private function max_post_id() {
+		global $wpdb;
+		return (int) $wpdb->get_var( "SELECT MAX(ID) FROM $wpdb->posts" );
+	}
+
+	/**
+	 * Assert the backfill has been (re)started from the first attachment.
+	 *
+	 * @param string $message Failure message prefix.
+	 * @return void
+	 */
+	private function assert_backfill_restarted( $message ) {
+		$this->assertSame( 0, (int) get_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION ), "$message: the backfill should start from the first attachment." );
+		$this->assertSame( $this->max_post_id(), (int) get_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_UNTIL_OPTION ), "$message: the backfill should stop at the current highest post ID." );
+		$this->assertNotFalse( wp_next_scheduled( Media_Search_Enhanced_Photo_Keywords::BACKFILL_HOOK ), "$message: the backfill should be scheduled." );
 	}
 
 	public function tear_down() {
@@ -188,8 +211,7 @@ class PhotoKeywordsTest extends WP_UnitTestCase {
 	public function test_backfill_is_scheduled_until_done() {
 		Media_Search_Enhanced_Photo_Keywords::maybe_schedule_backfill();
 
-		$this->assertSame( 0, (int) get_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION ), 'The backfill should start at the beginning.' );
-		$this->assertNotFalse( wp_next_scheduled( Media_Search_Enhanced_Photo_Keywords::BACKFILL_HOOK ) );
+		$this->assert_backfill_restarted( 'First start' );
 
 		// An unfinished backfill whose event was lost (e.g. the plugin was deactivated) is restarted.
 		wp_clear_scheduled_hook( Media_Search_Enhanced_Photo_Keywords::BACKFILL_HOOK );
@@ -205,5 +227,145 @@ class PhotoKeywordsTest extends WP_UnitTestCase {
 		Media_Search_Enhanced_Photo_Keywords::maybe_schedule_backfill();
 
 		$this->assertFalse( wp_next_scheduled( Media_Search_Enhanced_Photo_Keywords::BACKFILL_HOOK ) );
+	}
+
+	/**
+	 * The backfill removes entries whose keywords or metadata disappeared
+	 * while nothing was watching (plugin inactive).
+	 */
+	public function test_backfill_removes_stale_entries() {
+		global $wpdb;
+
+		$keywords_removed = $this->create_attachment();
+		$metadata_removed = $this->create_attachment();
+		$unchanged        = $this->create_attachment();
+		wp_update_attachment_metadata( $keywords_removed, $this->metadata( array( 'positano' ) ) );
+		wp_update_attachment_metadata( $metadata_removed, $this->metadata( array( 'ravello' ) ) );
+		wp_update_attachment_metadata( $unchanged, $this->metadata( array( 'amalfi' ) ) );
+
+		// Changes made without the plugin's hooks.
+		$wpdb->update(
+			$wpdb->postmeta,
+			array( 'meta_value' => serialize( $this->metadata( array() ) ) ),
+			array( 'post_id' => $keywords_removed, 'meta_key' => '_wp_attachment_metadata' )
+		);
+		$wpdb->delete( $wpdb->postmeta, array( 'post_id' => $metadata_removed, 'meta_key' => '_wp_attachment_metadata' ) );
+		wp_cache_delete( $keywords_removed, 'post_meta' );
+		wp_cache_delete( $metadata_removed, 'post_meta' );
+
+		Media_Search_Enhanced_Photo_Keywords::run_backfill();
+
+		$this->assertSame( '', $this->indexed( $keywords_removed ), 'Keywords removed from the metadata should leave the index.' );
+		$this->assertSame( '', $this->indexed( $metadata_removed ), 'An attachment without metadata should leave the index.' );
+		$this->assertSame( 'amalfi', $this->indexed( $unchanged ) );
+	}
+
+	/**
+	 * Attachments created after the backfill started belong to the meta hooks.
+	 *
+	 * An upload's post exists before its metadata is saved. If the backfill read
+	 * the post in that gap, it would see no keywords and could delete the entry
+	 * the hook writes a moment later.
+	 */
+	public function test_backfill_leaves_attachments_created_after_it_started() {
+		global $wpdb;
+
+		$existing = $this->create_attachment();
+		$this->insert_metadata_without_hooks( $existing, $this->metadata( array( 'positano' ) ) );
+
+		Media_Search_Enhanced_Photo_Keywords::restart_backfill();
+
+		// An upload in progress: indexed by the hook, its metadata not visible to the backfill.
+		$uploading = $this->create_attachment();
+		wp_update_attachment_metadata( $uploading, $this->metadata( array( 'harbour' ) ) );
+		$wpdb->delete( $wpdb->postmeta, array( 'post_id' => $uploading, 'meta_key' => '_wp_attachment_metadata' ) );
+		wp_cache_delete( $uploading, 'post_meta' );
+
+		Media_Search_Enhanced_Photo_Keywords::run_backfill();
+
+		$this->assertSame( 'positano', $this->indexed( $existing ) );
+		$this->assertSame( 'harbour', $this->indexed( $uploading ), 'The backfill must not touch attachments created after it started.' );
+		$this->assertSame( Media_Search_Enhanced_Photo_Keywords::BACKFILL_DONE, get_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION ) );
+	}
+
+	/**
+	 * Activation restarts the backfill: nothing kept the index in line while
+	 * the plugin was inactive.
+	 */
+	public function test_activation_restarts_the_backfill() {
+		update_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION, Media_Search_Enhanced_Photo_Keywords::BACKFILL_DONE );
+
+		Media_Search_Enhanced_Photo_Keywords::activate( false );
+
+		$this->assert_backfill_restarted( 'Activation' );
+	}
+
+	/**
+	 * Uploads and keyword changes made while the plugin was inactive are
+	 * picked up after reactivation.
+	 */
+	public function test_reactivation_picks_up_changes_made_while_inactive() {
+		global $wpdb;
+
+		$edited = $this->create_attachment();
+		wp_update_attachment_metadata( $edited, $this->metadata( array( 'positano' ) ) );
+		update_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION, Media_Search_Enhanced_Photo_Keywords::BACKFILL_DONE );
+
+		// While inactive: a new upload, and a keyword change on an existing photo.
+		$uploaded = $this->create_attachment();
+		$this->insert_metadata_without_hooks( $uploaded, $this->metadata( array( 'harbour' ) ) );
+		$wpdb->update(
+			$wpdb->postmeta,
+			array( 'meta_value' => serialize( $this->metadata( array( 'ravello' ) ) ) ),
+			array( 'post_id' => $edited, 'meta_key' => '_wp_attachment_metadata' )
+		);
+		wp_cache_delete( $edited, 'post_meta' );
+
+		Media_Search_Enhanced_Photo_Keywords::activate( false );
+		Media_Search_Enhanced_Photo_Keywords::run_backfill();
+
+		$this->assertSame( 'harbour', $this->indexed( $uploaded ) );
+		$this->assertSame( 'ravello', $this->indexed( $edited ) );
+	}
+
+	/**
+	 * Network activation restarts the backfill on every site.
+	 */
+	public function test_network_activation_restarts_the_backfill_on_every_site() {
+		if ( ! is_multisite() ) {
+			$this->markTestSkipped( 'Needs multisite (WP_MULTISITE=1).' );
+		}
+
+		$other_site = self::factory()->blog->create();
+		update_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION, Media_Search_Enhanced_Photo_Keywords::BACKFILL_DONE );
+		switch_to_blog( $other_site );
+		update_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION, Media_Search_Enhanced_Photo_Keywords::BACKFILL_DONE );
+		restore_current_blog();
+
+		Media_Search_Enhanced_Photo_Keywords::activate( true );
+
+		$this->assert_backfill_restarted( 'Main site' );
+		switch_to_blog( $other_site );
+		$this->assert_backfill_restarted( 'Other site' );
+		wp_clear_scheduled_hook( Media_Search_Enhanced_Photo_Keywords::BACKFILL_HOOK );
+		restore_current_blog();
+	}
+
+	/**
+	 * delete_post_meta_by_key() does not say which posts it affected, so the
+	 * backfill is restarted to remove their entries.
+	 */
+	public function test_bulk_metadata_deletion_removes_entries() {
+		$id = $this->create_attachment();
+		wp_update_attachment_metadata( $id, $this->metadata( array( 'positano' ) ) );
+		update_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION, Media_Search_Enhanced_Photo_Keywords::BACKFILL_DONE );
+
+		delete_post_meta_by_key( '_wp_attachment_metadata' );
+
+		$this->assert_backfill_restarted( 'Bulk deletion' );
+
+		Media_Search_Enhanced_Photo_Keywords::run_backfill();
+
+		$this->assertSame( '', $this->indexed( $id ) );
 	}
 }

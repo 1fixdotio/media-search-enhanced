@@ -20,6 +20,7 @@ require_once __DIR__ . '/public/class-media-search-enhanced-photo-keywords.php';
 $mse_uninstall_site = static function () {
 	delete_post_meta_by_key( Media_Search_Enhanced_Photo_Keywords::META_KEY );
 	delete_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_OPTION );
+	delete_option( Media_Search_Enhanced_Photo_Keywords::BACKFILL_UNTIL_OPTION );
 	wp_clear_scheduled_hook( Media_Search_Enhanced_Photo_Keywords::BACKFILL_HOOK );
 };
 

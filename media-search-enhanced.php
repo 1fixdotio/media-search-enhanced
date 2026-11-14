@@ -44,5 +44,7 @@ require_once( plugin_dir_path( __FILE__ ) . 'public/class-media-search-enhanced-
  *
  */
 
+register_activation_hook( __FILE__, array( 'Media_Search_Enhanced_Photo_Keywords', 'activate' ) );
+
 add_action( 'plugins_loaded', array( 'Media_Search_Enhanced', 'get_instance' ) );
 add_action( 'plugins_loaded', array( 'Media_Search_Enhanced_Photo_Keywords', 'init' ) );
